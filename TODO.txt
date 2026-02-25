@@ -1,0 +1,33 @@
+[X] OpenGL ES 3.0 context
+[X] Loading textures
+[X] Making shaders
+[X] Making a vertex array + attributes + buffers 
+[X] making a quad renderer + Trying to render something
+[X] making a text renderer
+[X] make a next_column function
+[X] tile spawning
+[X] long tile rendering
+[X] single tile rendering
+[X] long tile hitbox
+[X] single tile hitbox
+[X] Scoring system
+[X] death by not clearing
+[X] scrolling to not clearing
+[X] rendering red missed column
+[X] queue note events
+[X] play queued note events
+[V] Game over C minor chord
+[X] All notes off during level load and reset
+[X] Implement double tiles
+[ ] Correct timing in playing queued note events
+[X] Tile animations
+[X] Revives
+[X] Cull face ON
+[ ] Correct tempo and PT2 formula
+[X] Helper correct timing on DT tiles
+[V] Optimization highp -> mediump
+[X] better long tiles
+[X] alpha tiles
+[X] silent score counter
+[X] score counter bounce animation
+[V] .value() -> *
