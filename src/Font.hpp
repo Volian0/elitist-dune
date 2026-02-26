@@ -9,11 +9,11 @@
 
 struct Glyph
 {
-    glm::i64vec2 size{0,0};
-    glm::i64vec2 bearing{0,0};
+    glm::i64vec2 size{0, 0};
+    glm::i64vec2 bearing{0, 0};
     long long advance{0};
-    glm::uvec2 atlas_position{0,0};
-    glm::uvec2 atlas_size{0,0};
+    glm::uvec2 atlas_position{0, 0};
+    glm::uvec2 atlas_size{0, 0};
     void from_json(const nlohmann::json& t_json)
     {
         size = {t_json.at("size_x"), t_json.at("size_y")};

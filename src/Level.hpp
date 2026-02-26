@@ -18,6 +18,7 @@ struct Level
     Level(const char* t_file, Soundfont& t_soundfont)
         : song_info{t_file}, tempo(song_info.get_starting_tempo()), distribution(0, 11)
     {
+        starting_tps = tempo;
         spawn_tiles();
         std::scoped_lock lock{t_soundfont.mutex};
         t_soundfont.all_notes_off();
@@ -32,10 +33,17 @@ struct Level
         tile_id_tempo2 = total_tiles * 2 / 3;
     }
 
+    //TODO: IN CONSTRUCTOR
+    std::string song_name{"Hungarian Rhapsody No. 2"};
+    std::string song_composer{"Song Composer"};
+    unsigned long best_score{2026};
+    int speed_modifier{0};
     unsigned total_tiles{0};
 
     unsigned tile_id_tempo1;
     unsigned tile_id_tempo2;
+
+    std::chrono::steady_clock::time_point time_song_started;
 
     void queue_note_events(const std::chrono::steady_clock::time_point& t_time,
                            const std::vector<NoteInfo>& t_note_events, Soundfont& t_soundfont)
@@ -52,6 +60,7 @@ struct Level
     }
 
     float background_id = 0.0F;
+    float starting_tps;
 
     void touch_down(const glm::vec2& t_mouse_position, unsigned char t_finger_id,
                     const std::chrono::steady_clock::time_point& t_time, Soundfont& t_soundfont)
@@ -73,6 +82,10 @@ struct Level
             {
                 if (tile.id == 0)
                 {
+                    if (current_lap == 0)
+                    {
+                        time_song_started = t_time;
+                    }
                     ++current_lap;
                 }
                 else if (cleared_tiles == tile_id_tempo1)
@@ -83,7 +96,8 @@ struct Level
                 {
                     background_id = 2.0F;
                 }
-                if (current_lap > 1 && (tile.id == 0 || cleared_tiles % total_tiles == tile_id_tempo1 || cleared_tiles % total_tiles == tile_id_tempo2))
+                if (current_lap > 1 && (tile.id == 0 || cleared_tiles % total_tiles == tile_id_tempo1 ||
+                                        cleared_tiles % total_tiles == tile_id_tempo2))
                 {
                     tempo = new_bpm_pt2(tempo * 30.0F, 0.5F, 0.5F, current_lap >= 4) / 30.0F;
                 }
@@ -93,39 +107,43 @@ struct Level
             score += 1;
             if (tile_info.get_type() != TileInfo::Type::LONG)
             {
-                score_display = score;   
+                score_display = score;
                 time_last_score_update = t_time;
             }
             if (tile_info.get_type() == TileInfo::Type::DOUBLE) // handle double tiles
             {
-                if (first_hit) //first hit
+                if (first_hit) // first hit
                 {
-                    //tile_time_clicked = t_time;
+                    // tile_time_clicked = t_time;
                     queue_note_events(t_time, tile_info.get_double_tile_events()[0], t_soundfont);
                 }
-                else //second hit
-                { 
-                    //float seconds_since_last_hit = (tp_new - tile.time_clicked).count();
-                    std::chrono::steady_clock::time_point time_second = tile_time_clicked
-                    + std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<float>(
-                        0.5F * float(tile_info.get_unit_length()) /(float(song_info.get_length_units_per_single_tile()) * tempo)));
-                    queue_note_events(t_time > time_second ? t_time : time_second, tile_info.get_double_tile_events()[1], t_soundfont);
+                else // second hit
+                {
+                    // float seconds_since_last_hit = (tp_new - tile.time_clicked).count();
+                    std::chrono::steady_clock::time_point time_second =
+                        tile_time_clicked +
+                        std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<float>(
+                            0.5F * float(tile_info.get_unit_length()) /
+                            (float(song_info.get_length_units_per_single_tile()) * tempo)));
+                    queue_note_events(t_time > time_second ? t_time : time_second,
+                                      tile_info.get_double_tile_events()[1], t_soundfont);
                 }
                 ((unsigned(hit_column) & 0b1100) ? tile.time_clicked_left : tile.time_clicked_right) = t_time;
             }
-            else 
+            else
             {
                 tile.time_clicked_left = t_time;
                 if (tile_info.get_type() == TileInfo::Type::LONG)
                 {
                     tile.finger_id = t_finger_id;
                     tile.position_clicked = std::max(position + hit_position.y + 0.5F, tile.position + 0.5F);
-                    if (tile.position_clicked >= tile.position + float(tile_info.get_unit_length()) /
-                                                                    float(song_info.get_length_units_per_single_tile()))
+                    if (tile.position_clicked >=
+                        tile.position +
+                            float(tile_info.get_unit_length()) / float(song_info.get_length_units_per_single_tile()))
                     {
                         // fully cleared
                         score += 1;
-                        score_display = score;   
+                        score_display = score;
                         time_last_score_update = t_time;
                         tile.fully_cleared_long = true;
                         tile.finger_id = 255;
@@ -155,7 +173,7 @@ struct Level
         {
             if (tile.finger_id == t_finger_id)
             {
-                score_display = score;   
+                score_display = score;
                 time_last_score_update = t_time;
                 tile.finger_id = 255;
             }
@@ -167,7 +185,7 @@ struct Level
     void game_over(const std::chrono::steady_clock::time_point& t_time, Soundfont& t_soundfont)
     {
         score_display = score;
-        //time_last_score_update = t_time;
+        // time_last_score_update = t_time;
         time_game_over = t_time;
         position_game_over = position;
         std::scoped_lock lock{t_soundfont.mutex};
@@ -235,7 +253,7 @@ struct Level
                     {
                         // fully cleared
                         score += 1;
-                        score_display = score;   
+                        score_display = score;
                         time_last_score_update = t_time;
                         tile.fully_cleared_long = true;
                         tile.finger_id = 255;
@@ -461,26 +479,28 @@ struct Level
         t_soundfont.all_notes_off();
     }
 
-    std::chrono::steady_clock::time_point tile_time_clicked{}; // for double tile
+    std::chrono::steady_clock::time_point tile_time_clicked{};      // for double tile
     std::chrono::steady_clock::time_point tile_full_time_clicked{}; // for effects
 
-        float new_bpm_pt2(unsigned t_current_bpm, float t_current_beats, float t_current_part_base_beats, bool t_reached_fourth_lap) {
-		//TODO: is this the correct order?
-		const volatile float t_unknown = t_reached_fourth_lap ? 130.0F : 100.0F;
+    float new_bpm_pt2(unsigned t_current_bpm, float t_current_beats, float t_current_part_base_beats,
+                      bool t_reached_fourth_lap)
+    {
+        // TODO: is this the correct order?
+        const volatile float t_unknown = t_reached_fourth_lap ? 130.0F : 100.0F;
 
-		const volatile float v1 = std::max(0.0F, t_current_beats);
-		const volatile float v2 = t_current_bpm;
-		const volatile float n = v2 / v1;
-		const volatile float v3 = (n - t_unknown);
-		const volatile float v4 = 0.001F * v3;
-		const volatile float a = 1.3F - v4;
-		const volatile float r = n / 60.0F;
-		const volatile float v5 = a < 1.04F ? 1.04F : a;
-		const volatile float v6 = r * v5;
-		const volatile float v7 = 60.0F * v6;
-		const volatile float v8 = v7 * t_current_part_base_beats;
-		return v8;
-	}
+        const volatile float v1 = std::max(0.0F, t_current_beats);
+        const volatile float v2 = t_current_bpm;
+        const volatile float n = v2 / v1;
+        const volatile float v3 = (n - t_unknown);
+        const volatile float v4 = 0.001F * v3;
+        const volatile float a = 1.3F - v4;
+        const volatile float r = n / 60.0F;
+        const volatile float v5 = a < 1.04F ? 1.04F : a;
+        const volatile float v6 = r * v5;
+        const volatile float v7 = 60.0F * v6;
+        const volatile float v8 = v7 * t_current_part_base_beats;
+        return v8;
+    }
 
     void reset(Soundfont& t_soundfont)
     {
@@ -498,9 +518,10 @@ struct Level
         current_lap = 0;
         revives_used = 0;
         background_id = 0.0F;
+        speed_modifier = 0;
         spawn_tiles();
         std::scoped_lock lock{t_soundfont.mutex};
         t_soundfont.all_notes_off();
-        //tempo = 10.0F; //TODO: TEMPORARY, DELETE LATER
+        // tempo = 10.0F; //TODO: TEMPORARY, DELETE LATER
     }
 };

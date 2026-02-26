@@ -31,3 +31,5 @@
 [X] silent score counter
 [X] score counter bounce animation
 [V] .value() -> *
+[ ] Long tile cleared should be black like single tile
+[ ] 1s delta time should exit the song
