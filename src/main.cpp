@@ -22,7 +22,7 @@
 
 #include <chrono>
 #include <cstdlib>
-#include <iostream> 
+#include <iostream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -74,11 +74,12 @@ int main(int, char*[])
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
     SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, 1);
-    glm::uvec2 resolution{360, 640}; //TODO: THIS IS RESOLUTION
-    //glm::uvec2 resolution{720, 720}; //TODO: WRONG RESOLUTION
+    glm::uvec2 resolution{360, 640}; // TODO: THIS IS RESOLUTION
+    // glm::uvec2 resolution{720, 720}; //TODO: WRONG RESOLUTION
     Font font{"texture/font.json"};
-    SDL_Window* window{SDL_CreateWindow(APP_NAME, resolution.x, resolution.y,
-                                        SDL_WINDOW_FULLSCREEN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL)}; //TODO: RESIZABLE!!
+    SDL_Window* window{
+        SDL_CreateWindow(APP_NAME, resolution.x, resolution.y,
+                         SDL_WINDOW_FULLSCREEN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL)}; // TODO: RESIZABLE!!
     SDL_GLContext context{SDL_GL_CreateContext(window)};
     SDL_GL_SetSwapInterval(1);
     glClearColor(0.5, 0.5, 0.5, 1.0);
@@ -564,6 +565,11 @@ int main(int, char*[])
                             level.speed_modifier = new_speed_modifier;
                             level.tempo = new_tps;
                         }
+                    } 
+                    else
+                    {
+                        level.speed_modifier = 0;
+                        level.tempo = level.starting_tps;
                     }
                     /*if (level.revives_used == 0 && level.tempo <= 20.0F) //TEMPORARY
                     {
@@ -621,9 +627,8 @@ int main(int, char*[])
             {
                 if (tile.fully_cleared_long)
                 {
-                    float alpha = (1.0F - glm::min(time_left / 0.1F, 1.0F));
-                    glm::vec4 color = CLEAR_BLUE_CLEAR;
-                    color.a += alpha * 0.333F;
+                    float alpha = glm::min(time_left / 0.2F, 1.0F);
+                    glm::vec4 color = glm::mix(CLEAR_BLUE, BLACK_CLEAR, alpha);
                     draw_quad({460, 511}, {0, 0}, {column_position, -(tile.position - level.position - 4.0F) - length},
                               {1.0F, length}, matrix_level, color, color);
                 }
@@ -738,60 +743,69 @@ int main(int, char*[])
         0.001F, glm::vec4(1.0F, 0.1F, 0.1F, 1.0F)); draw_text_ascii(font, {32,64+64}, "TPS: " +
         std::to_string(level.tempo), matrix_test, 0.001F, glm::vec4(0.0F, 0.0F, 0.0F, 1.0F), 0.9); draw_text_ascii(font,
         {32,64+64}, "TPS: " + std::to_string(level.tempo), matrix_test, 0.001F, glm::vec4(1.0F, 0.1F, 0.1F, 1.0F));*/
-            std::string string_score{std::to_string(level.score_display)};
-            std::string string_tps{std::to_string(level.tempo)};
-            if (string_tps.size() > 5)
-            {
-                string_tps = string_tps.substr(0, 5);
-            }
-            //float string_song_name_length = get_length_text_ascii(font, level.song_name, 0.0000015F);
-            //float string_song_composer_length = get_length_text_ascii(font, level.song_composer, 0.000001F);
-            float progress_idle = std::chrono::duration<float>(tp_new - level.time_song_started).count() * 5.0F;
-            bool really_idle = (level.idle && level.revives_used == 0);
-            if (really_idle || progress_idle < 1.0F)
-            {
-                float powed = glm::pow(progress_idle, 2.0F);
-                std::string best_string = "Best: " + std::to_string(level.best_score);
-                float string_best_score_length = get_length_text_ascii(font, best_string, 0.000001F);
-                draw_quad({460, 511}, {0, 0}, {0.0F, really_idle ? 3.0F : 3.0F + progress_idle * 4.0F},
-                              {4.0F, 1.0F}, matrix_level);
-                draw_text_ascii(font, {0.125F * 0.5F, 0.875F / aspect_ratio + 0.05F}, level.song_composer, matrix_aspect,
+        std::string string_score{std::to_string(level.score_display)};
+        std::string string_tps{std::to_string(level.tempo)};
+        if (string_tps.size() > 5)
+        {
+            string_tps = string_tps.substr(0, 5);
+        }
+        // float string_song_name_length = get_length_text_ascii(font, level.song_name, 0.0000015F);
+        // float string_song_composer_length = get_length_text_ascii(font, level.song_composer, 0.000001F);
+        float progress_idle = std::chrono::duration<float>(tp_new - level.time_song_started).count() * 5.0F;
+        bool really_idle = (level.idle && level.revives_used == 0);
+        if (really_idle || progress_idle < 1.0F)
+        {
+            float powed = glm::pow(progress_idle, 2.0F);
+            std::string best_string = "Best: " + std::to_string(level.best_score);
+            float string_best_score_length = get_length_text_ascii(font, best_string, 0.000001F);
+            draw_quad({460, 511}, {0, 0}, {0.0F, really_idle ? 3.0F : 3.0F + progress_idle * 4.0F}, {4.0F, 1.0F},
+                      matrix_level);
+            draw_text_ascii(font, {0.125F * 0.5F, 0.875F / aspect_ratio + 0.05F}, level.song_composer, matrix_aspect,
                             0.000001F, glm::vec4(0.4F, 0.4F, 0.4F, 1.0F), glm::vec4(0.4F, 0.4F, 0.4F, 1.0F),
                             really_idle ? 0.5F : 0.5F - powed * 0.5F);
-                draw_text_ascii(font, {1.0F - 0.5F * 0.125F - string_best_score_length, 0.875F / aspect_ratio + 0.05F}, best_string, matrix_aspect,
-                            0.000001F, glm::vec4(1.0F, 0.1F, 0.1F, 1.0F), glm::vec4(1.0F, 0.2F, 0.2F, 1.0F),
-                            really_idle ? 0.5F : 0.5F - powed * 0.5F);
-                draw_text_ascii(font, {0.125F * 0.5F, 0.875F / aspect_ratio - 0.01F}, level.song_name, matrix_aspect,
+            draw_text_ascii(font, {1.0F - 0.5F * 0.125F - string_best_score_length, 0.875F / aspect_ratio + 0.05F},
+                            best_string, matrix_aspect, 0.000001F, glm::vec4(1.0F, 0.1F, 0.1F, 1.0F),
+                            glm::vec4(1.0F, 0.2F, 0.2F, 1.0F), really_idle ? 0.5F : 0.5F - powed * 0.5F);
+            draw_text_ascii(font, {0.125F * 0.5F, 0.875F / aspect_ratio - 0.01F}, level.song_name, matrix_aspect,
                             0.0000015F, glm::vec4(0.00F, 0.0F, 0.0F, 1.0F), glm::vec4(0.0F, 0.0F, 0.0F, 1.0F),
                             really_idle ? 0.5F : 0.5F - powed * 0.5F);
-                float offset = glm::sin(total_time * 3.1415F) * 0.05F;
-                draw_quad({870, 128}, {128, 128}, {0.25F + offset - (really_idle ? 0.0F : powed), 0.5F - 0.25F * aspect_ratio},
-                              {0.5F, 0.5F * aspect_ratio}, matrix_level, glm::vec4(1.0F, 0.1F, 0.1F, 0.5F), glm::vec4(1.0F, 0.1F, 0.1F, 0.8F));
-                draw_quad({870, 0}, {128, 128}, {3.25F - offset + (really_idle ? 0.0F : powed), 0.5F - 0.25F * aspect_ratio},
-                              {0.5F, 0.5F * aspect_ratio}, matrix_level, glm::vec4(1.0F, 0.1F, 0.1, 0.5F), glm::vec4(1.0F, 0.1F, 0.1F, 0.8F));
-            }
-            if (really_idle)
-            {
-                string_score = string_tps;
-                string_tps = "Starting TPS";
-            }
-                float additional_score_size =
-                    (0.05F - glm::min(std::chrono::duration<float>(tp_new - level.time_last_score_update).count(), 0.05F)) *
-                        0.00001F +
-                    0.000003F; 
-                float string_score_length = get_length_text_ascii(font, string_score, additional_score_size);
-                float string_tps_length = get_length_text_ascii(font, string_tps, 0.0000015F);
-                bool draw_score = !level.idle || level.revives_used > 0;
-                draw_text_ascii(font, {0.5F - string_score_length * 0.5F, 0.125 / aspect_ratio}, string_score, matrix_aspect,
-                                additional_score_size, glm::vec4(0.01F, 0.0F, 0.0F, 1.0F), glm::vec4(0.0F, 0.0F, 0.0F, 1.0F),
-                                0.9);
-                draw_text_ascii(font, {0.5F - string_tps_length * 0.5F, 0.125 / aspect_ratio + 0.09}, string_tps, matrix_aspect,
-                                0.0000015F, glm::vec4(0.01F, 0.0F, 0.0F, 1.0F), glm::vec4(0.0F, 0.0F, 0.0F, 1.0F), 0.9);
-                glm::vec4 color = level.speed_modifier == 0 ? glm::vec4(1.0F, 0.1F, 0.1F, 1.0F) : glm::vec4(0.9F, 0.9F, 0.1F, 1.0F);
-                draw_text_ascii(font, {0.5F - string_score_length * 0.5F, 0.125 / aspect_ratio}, string_score, matrix_aspect,
-                                additional_score_size, color, color);
-                draw_text_ascii(font, {0.5 - string_tps_length * 0.5F, 0.125 / aspect_ratio + 0.09}, string_tps, matrix_aspect,
-                                0.0000015F, glm::vec4(1.0F, 0.9F, 0.9F, 1.0F), glm::vec4(1.0F, 1.0F, 1.0F, 1.0F));
+            float offset = glm::sin(total_time * 3.1415F) * 0.05F;
+            draw_quad({870, 128}, {128, 128},
+                      {0.25F + offset - (really_idle ? 0.0F : powed), 0.5F - 0.25F * aspect_ratio},
+                      {0.5F, 0.5F * aspect_ratio}, matrix_level, glm::vec4(1.0F, 0.1F, 0.1F, 0.5F),
+                      glm::vec4(1.0F, 0.1F, 0.1F, 0.8F));
+            draw_quad({870, 0}, {128, 128},
+                      {3.25F - offset + (really_idle ? 0.0F : powed), 0.5F - 0.25F * aspect_ratio},
+                      {0.5F, 0.5F * aspect_ratio}, matrix_level, glm::vec4(1.0F, 0.1F, 0.1, 0.5F),
+                      glm::vec4(1.0F, 0.1F, 0.1F, 0.8F));
+        }
+        if (really_idle)
+        {
+            string_score = string_tps;
+            string_tps = "Starting TPS";
+        }
+        float additional_score_size =
+            (0.05F - glm::min(std::chrono::duration<float>(tp_new - level.time_last_score_update).count(), 0.05F)) *
+                0.00001F +
+            0.000003F;
+        float string_score_length = get_length_text_ascii(font, string_score, additional_score_size);
+        float string_tps_length = get_length_text_ascii(font, string_tps, 0.0000015F);
+        bool draw_score = !level.idle || level.revives_used > 0;
+        draw_text_ascii(font, {0.5F - string_score_length * 0.5F, 0.125F / aspect_ratio}, string_score, matrix_aspect,
+                        additional_score_size, glm::vec4(0.0F, 0.0F, 0.0F, 1.0F), glm::vec4(0.0F, 0.0F, 0.0F, 1.0F),
+                        0.9);
+        draw_text_ascii(font, {0.5F - string_tps_length * 0.5F, 0.125F / aspect_ratio + 0.09}, string_tps, matrix_aspect,
+                        0.0000015F, glm::vec4(0.0F, 0.0F, 0.0F, 1.0F), glm::vec4(0.0F, 0.0F, 0.0F, 1.0F), 0.9);
+        glm::vec4 color =
+            level.speed_modifier == 0 ? glm::vec4(1.0F, 0.1F, 0.1F, 1.0F) : glm::vec4(0.9F, 0.9F, 0.1F, 1.0F);
+        if (level.speed_modifier < 0)
+        {
+            color = glm::vec4(0.1F, 0.9F, 0.1F, 1.0F);
+        }
+        draw_text_ascii(font, {0.5F - string_score_length * 0.5F, 0.125F / aspect_ratio}, string_score, matrix_aspect,
+                        additional_score_size, color, color);
+        draw_text_ascii(font, {0.5 - string_tps_length * 0.5F, 0.125F / aspect_ratio + 0.09}, string_tps, matrix_aspect,
+                        0.0000015F, glm::vec4(1.0F, 0.9F, 0.9F, 1.0F), glm::vec4(1.0F, 1.0F, 1.0F, 1.0F));
         /*if (level.idle)
         {draw_text_debug({32, 32 + 128+64}, "Reviv: " + std::to_string(3 - level.revives_used), matrix_test, 2.0F,
                   glm::vec4{1.0, 0.047, 0.047, 1.0});}*/
