@@ -15,8 +15,11 @@
 
 struct Level
 {
-    Level(const char* t_file, Soundfont& t_soundfont)
-        : song_info{t_file}, tempo(song_info.get_starting_tempo()), distribution(0, 11)
+    Level() = default;
+
+    Level(const char* t_file, Soundfont& t_soundfont, std::string t_song_name, std::string t_song_composer)
+        : song_info{t_file}, tempo(song_info.get_starting_tempo()), distribution(0, 11),
+          song_name{std::move(t_song_name)}, song_composer{std::move(t_song_composer)}
     {
         starting_tps = tempo;
         spawn_tiles();
@@ -33,15 +36,17 @@ struct Level
         tile_id_tempo2 = total_tiles * 2 / 3;
     }
 
-    //TODO: IN CONSTRUCTOR
-    std::string song_name{"Hungarian Rhapsody No. 2"};
-    std::string song_composer{"Song Composer"};
-    unsigned long best_score{2026};
+    // TODO: IN CONSTRUCTOR
+    std::string song_name;
+    std::string song_composer;
+    unsigned long best_score{0};
     int speed_modifier{0};
     unsigned total_tiles{0};
 
     unsigned tile_id_tempo1;
     unsigned tile_id_tempo2;
+
+    bool boot_to_main_menu = false;
 
     std::chrono::steady_clock::time_point time_song_started;
 
@@ -222,7 +227,8 @@ struct Level
                 {
                     if (revives_used >= 3)
                     {
-                        reset(t_soundfont);
+                        boot_to_main_menu = true;
+                        t_soundfont.all_notes_off();
                     }
                     else
                     {
@@ -437,7 +443,7 @@ struct Level
             }
         }
         return previous_column;
-    }
+    } 
 
     SongInfo song_info;
     float tempo{0.0};

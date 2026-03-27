@@ -93,6 +93,7 @@ class SongInfo
 public:
     SongInfo(SDL_IOStream* t_stream);
     SongInfo(const char* t_path);
+    SongInfo() = default;
 
     [[nodiscard]] constexpr auto get_note_ticks_per_single_tile() const noexcept
     {
@@ -114,10 +115,17 @@ public:
         return m_tiles;
     }
 
-private:
-    std::uint_fast16_t m_note_ticks_per_single_tile;
-    std::uint_fast16_t m_length_units_per_single_tile;
-    double m_starting_tempo;
-    double m_acceleration;
+private: 
+    std::uint_fast16_t m_note_ticks_per_single_tile{16};
+    std::uint_fast16_t m_length_units_per_single_tile{16};
+    double m_starting_tempo{0.0};
+    double m_acceleration{0.0};
     std::vector<TileInfo> m_tiles;
+};
+
+struct BasicSongInfo
+{
+    std::string name;
+    std::string composer;
+    std::string file;
 };

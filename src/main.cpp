@@ -14,9 +14,11 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3_mixer/SDL_mixer.h>
+#include <glm/ext/matrix_transform.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <nlohmann/json.hpp>
 #include <stb/stb_image.h>
 #include <tsf/tsf.h>
 
@@ -57,10 +59,16 @@ glm::mat4 create_ortographic_matrix(const glm::vec2& t_desired_resolution, float
                       1.0F);
 }
 
+enum class State : unsigned char
+{
+    SONG_SELECT,
+    LEVEL
+};
+
 int main(int, char*[])
 {
     constexpr const char* APP_NAME{"Elitist Dune"};
-    SDL_SetAppMetadata(APP_NAME, "0.1.2", "com.volian.elitistdune");
+    SDL_SetAppMetadata(APP_NAME, "0.2.1", "com.volian.elitistdune");
     SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO);
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "Portrait");
     constexpr unsigned SAMPLE_RATE{44100};
@@ -75,7 +83,8 @@ int main(int, char*[])
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
     SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, 1);
     glm::uvec2 resolution{360, 640}; // TODO: THIS IS RESOLUTION
-    // glm::uvec2 resolution{720, 720}; //TODO: WRONG RESOLUTION
+    // glm::uvec2 resolution{1000, 1000};
+    //  glm::uvec2 resolution{720, 720}; //TODO: WRONG RESOLUTION
     Font font{"texture/font.json"};
     SDL_Window* window{
         SDL_CreateWindow(APP_NAME, resolution.x, resolution.y,
@@ -469,7 +478,17 @@ int main(int, char*[])
         return length;
     };
     glm::mat4 matrix_level{glm::ortho(0.0F, 4.0F, 4.0F, 0.0F, -1.0F, 1.0F)};
-    Level level{"song/test3.usong", soundfont};
+    std::vector<BasicSongInfo> basic_song_infos;
+    {
+        const auto buffer = file_to_buffer<char>("song/songs.json");
+        nlohmann::json json = nlohmann::json::parse(buffer.begin(), buffer.end());
+        for (const auto& json_song_info : json)
+        {
+            basic_song_infos.emplace_back(
+                BasicSongInfo{json_song_info.at("name"), json_song_info.at("composer"), json_song_info.at("file")});
+        }
+    }
+    Level level;
     auto tp_old = std::chrono::steady_clock::now();
     const auto tp_start = tp_old;
     constexpr glm::vec4 CLEAR_TILE{0.1F, 0.6F, 1.0F, 1.0F};
@@ -509,6 +528,17 @@ int main(int, char*[])
             }
         }
     };
+    State state = State::SONG_SELECT;
+    std::optional<unsigned char> menu_finger_id;
+    float menu_finger_delta{0.0F};
+    const unsigned total_songs = basic_song_infos.size();
+    const float max_scroll_size{total_songs * 0.24F + 0.02F};
+    float current_scroll{0.0F};
+    std::optional<unsigned> menu_focused_button;
+    unsigned char menu_focused_button_finger{0};
+    bool menu_scrolling = false;
+    float scroll_velocity = 0.0f;
+    glm::mat4 mvp = matrix_aspect * glm::translate(glm::mat4{1.0F}, glm::vec3{0.0F, -current_scroll, 0.0F});
     while (true)
     {
         const auto tp_new = std::chrono::steady_clock::now();
@@ -541,51 +571,147 @@ int main(int, char*[])
                 glViewport(0, 0, resolution.x, resolution.y);
                 matrix_test = create_ortographic_matrix(resolution, aspect_ratio);
                 matrix_aspect = create_ortographic_matrix({1.0F, 1.0F / aspect_ratio}, aspect_ratio);
+                current_scroll =
+                    glm::clamp(current_scroll, 0.0F, glm::max(0.0F, max_scroll_size - 1.0F / aspect_ratio));
+                mvp = matrix_aspect * glm::translate(glm::mat4{1.0F}, glm::vec3{0.0F, -current_scroll, 0.0F});
             }
             else if (event.type == SDL_EVENT_FINGER_DOWN)
             {
-                if ((event.tfinger.y > 0.75F || event.tfinger.y < 0.25F) && level.idle)
+                if (state == State::LEVEL)
                 {
-                    if (event.tfinger.y < 0.25F && event.tfinger.x < 0.25F)
+                    if (event.tfinger.y > 0.75F && level.idle)
                     {
-                        int new_speed_modifier = level.speed_modifier - 1;
-                        float new_tps = level.starting_tps + float(new_speed_modifier) * 0.2F;
-                        if (new_tps >= 1.0F)
-                        {
-                            level.speed_modifier = new_speed_modifier;
-                            level.tempo = new_tps;
-                        }
                     }
-                    else if (event.tfinger.y < 0.25F && event.tfinger.x > 0.75F)
+                    else if ((event.tfinger.y < 0.25F) && level.idle && level.current_lap == 0)
                     {
-                        int new_speed_modifier = level.speed_modifier + 1;
-                        float new_tps = level.starting_tps + float(new_speed_modifier) * 0.2F;
-                        if (new_tps <= 20.0F)
+                        if (event.tfinger.x < 0.25F)
                         {
-                            level.speed_modifier = new_speed_modifier;
-                            level.tempo = new_tps;
+                            int new_speed_modifier = level.speed_modifier - 1;
+                            float new_tps = level.starting_tps + float(new_speed_modifier) * 0.2F;
+                            if (new_tps >= 1.0F)
+                            {
+                                level.speed_modifier = new_speed_modifier;
+                                level.tempo = new_tps;
+                            }
                         }
-                    } 
+                        else if (event.tfinger.x > 0.75F)
+                        {
+                            int new_speed_modifier = level.speed_modifier + 1;
+                            float new_tps = level.starting_tps + float(new_speed_modifier) * 0.2F;
+                            if (new_tps <= 20.0F)
+                            {
+                                level.speed_modifier = new_speed_modifier;
+                                level.tempo = new_tps;
+                            }
+                        }
+                        else
+                        {
+                            level.speed_modifier = 0;
+                            level.tempo = level.starting_tps;
+                        }
+                        /*if (level.revives_used == 0 && level.tempo <= 20.0F) //TEMPORARY
+                        {
+                            level.tempo += 0.2F;
+                        }*/
+                    }
                     else
                     {
-                        level.speed_modifier = 0;
-                        level.tempo = level.starting_tps;
+                        level.touch_down({event.tfinger.x, event.tfinger.y}, event.tfinger.fingerID, tp_new, soundfont);
                     }
-                    /*if (level.revives_used == 0 && level.tempo <= 20.0F) //TEMPORARY
-                    {
-                        level.tempo += 0.2F;
-                    }*/
+                    // soundfont.all_notes_off();
+                    // soundfont.note_on(50, 100);
                 }
-                else
+                else if (state == State::SONG_SELECT)
                 {
-                    level.touch_down({event.tfinger.x, event.tfinger.y}, event.tfinger.fingerID, tp_new, soundfont);
+                    if (!menu_finger_id)
+                    {
+                        menu_finger_id = event.tfinger.fingerID;
+                    }
+                    if (!menu_focused_button && !menu_scrolling)
+                    {
+                        // try to focus a button
+                        for (unsigned i = 0; i < total_songs; ++i)
+                        {
+                            if (event.tfinger.x >= 0.69F &&
+                                event.tfinger.y / aspect_ratio >= 0.14F + 0.24F * i - current_scroll &&
+                                event.tfinger.x <= 0.96F &&
+                                event.tfinger.y / aspect_ratio <= 0.22F + 0.24F * i - current_scroll)
+                            {
+                                menu_focused_button = i;
+                                menu_focused_button_finger = event.tfinger.fingerID;
+                                break;
+                            }
+                        }
+                    }
                 }
-                // soundfont.all_notes_off();
-                // soundfont.note_on(50, 100);
             }
             else if (event.type == SDL_EVENT_FINGER_UP)
             {
-                level.touch_up(event.tfinger.fingerID, tp_new);
+                if (state == State::LEVEL)
+                {
+                    level.touch_up(event.tfinger.fingerID, tp_new);
+                }
+                else if (state == State::SONG_SELECT)
+                {
+                    if (event.tfinger.fingerID == menu_finger_id)
+                    {
+                        menu_finger_id = std::nullopt;
+                        menu_finger_delta = 0.0F;
+                        menu_scrolling = false;
+                    }
+                    if (menu_focused_button && menu_focused_button_finger == event.tfinger.fingerID)
+                    {
+                        // check if we hit the button and change to level state
+                        for (unsigned i = 0; i < total_songs; ++i)
+                        {
+                            if (event.tfinger.x >= 0.69F &&
+                                event.tfinger.y / aspect_ratio >= 0.14F + 0.24F * i - current_scroll &&
+                                event.tfinger.x <= 0.96F &&
+                                event.tfinger.y / aspect_ratio <= 0.22F + 0.24F * i - current_scroll)
+                            {
+                                // TODO TODO: LEVEL CHANGING HERE
+                                level = Level{("song/" + basic_song_infos.at(i).file).data(), soundfont,
+                                              basic_song_infos.at(i).name, basic_song_infos.at(i).composer};
+                                state = State::LEVEL;
+                                break;
+                            }
+                        }
+
+                        menu_focused_button.reset();
+                    }
+                }
+            }
+            else if (event.type == SDL_EVENT_FINGER_MOTION)
+            {
+                if (state == State::SONG_SELECT)
+                {
+                    if (event.tfinger.fingerID == menu_finger_id)
+                    {
+                        if (!menu_scrolling && glm::abs(menu_finger_delta) >= 0.05F)
+                        {
+                            menu_scrolling = true;
+                            menu_focused_button.reset();
+                        }
+                        else if (!menu_scrolling)
+                        {
+                            menu_finger_delta += event.tfinger.dy / aspect_ratio;
+                        }
+                        if (menu_scrolling)
+                        {
+                            float delta = event.tfinger.dy / aspect_ratio;
+
+                            current_scroll -= delta;
+
+                            // update velocity (tune multiplier)
+                            scroll_velocity = -delta * 50.0f;
+
+                            current_scroll =
+                                glm::clamp(current_scroll, 0.0F, glm::max(0.0F, max_scroll_size - 1.0F / aspect_ratio));
+                            mvp =
+                                matrix_aspect * glm::translate(glm::mat4{1.0F}, glm::vec3{0.0F, -current_scroll, 0.0F});
+                        }
+                    }
+                }
             }
         }
         if (in_background)
@@ -594,304 +720,385 @@ int main(int, char*[])
             std::this_thread::yield();
             continue;
         }
+        glClear(GL_COLOR_BUFFER_BIT /*| GL_DEPTH_BUFFER_BIT*/);
         buffer_vbo_basic.clear();
         buffer_ebo_basic.clear();
         ebo_offset = 0;
         buffer_vbo_sdf.clear();
         buffer_ebo_sdf.clear();
         ebo_offset_sdf = 0;
-        // update the game
-        level.update(delta_time, tp_new, soundfont);
-
-        // draw_quad({1, 1}, {446, 510}, {0, 0}, {4, 4}, matrix_level);
-
-        // draw tiles
-        for (unsigned column_i = 1; column_i < 4; ++column_i)
+        if (state == State::LEVEL)
         {
-            float size = 0.02F;
-            draw_quad({449, 511}, {9, 0}, {float(column_i) - size * 0.5F, 0.0F}, {size, 4.0F}, matrix_level);
-        }
-        for (const auto& tile : level.tiles)
-        {
-            if (level.game_over_column == Column::NONE && ticks_ms / 250 % 2 && &tile == &level.tiles[0])
+            // update the game
+            level.update(delta_time, tp_new, soundfont);
+            if (level.boot_to_main_menu)
             {
+                state = State::SONG_SELECT;
                 continue;
             }
-            // 460,511 0,0
-            float length = float(level.song_info.get_tiles()[tile.id].get_unit_length()) /
-                           float(level.song_info.get_length_units_per_single_tile());
-            const auto type = level.song_info.get_tiles()[tile.id].get_type();
-            float column_position = column_to_position(tile.column);
-            float time_left = std::chrono::duration<float>(tp_new - tile.time_clicked_left).count();
-            if (type == TileInfo::Type::LONG)
+            // draw_quad({1, 1}, {446, 510}, {0, 0}, {4, 4}, matrix_level);
+
+            // draw tiles
+            for (unsigned column_i = 1; column_i < 4; ++column_i)
             {
-                if (tile.fully_cleared_long)
+                float size = 0.02F;
+                draw_quad({449, 511}, {9, 0}, {float(column_i) - size * 0.5F, 0.0F}, {size, 4.0F}, matrix_level);
+            }
+            for (const auto& tile : level.tiles)
+            {
+                if (level.game_over_column == Column::NONE && ticks_ms / 250 % 2 && &tile == &level.tiles[0])
                 {
-                    float alpha = glm::min(time_left / 0.2F, 1.0F);
-                    glm::vec4 color = glm::mix(CLEAR_BLUE, BLACK_CLEAR, alpha);
-                    draw_quad({460, 511}, {0, 0}, {column_position, -(tile.position - level.position - 4.0F) - length},
-                              {1.0F, length}, matrix_level, color, color);
+                    continue;
                 }
-                else
+                // 460,511 0,0
+                float length = float(level.song_info.get_tiles()[tile.id].get_unit_length()) /
+                               float(level.song_info.get_length_units_per_single_tile());
+                const auto type = level.song_info.get_tiles()[tile.id].get_type();
+                float column_position = column_to_position(tile.column);
+                float time_left = std::chrono::duration<float>(tp_new - tile.time_clicked_left).count();
+                if (type == TileInfo::Type::LONG)
                 {
-                    float extra_length = length - 1.5F;
-                    float circle_height = 0.5 * aspect_ratio;
-                    // float how_much_cleared = 0.1F;
-                    // 449,1  62,62
-                    draw_quad({460, 511}, {0, 0}, {column_position, -(tile.position - level.position - 4.0F) - length},
-                              {1.0F, extra_length}, matrix_level, TOP_BLUE, BOTTOM_BLUE);
-                    draw_quad({460, 511}, {0, 0},
-                              {column_position, -(tile.position - level.position - 4.0F) - length + extra_length},
-                              {1.0F, 1.0F}, matrix_level, BOTTOM_BLUE, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
-                    draw_quad(
-                        {460, 511}, {0, 0},
-                        {column_position, -(tile.position - level.position - 4.0F) - length + extra_length + 1.0F},
-                        {1.0F, 0.5F}, matrix_level, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F},
-                        glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
-                    if (tile.cleared_column == Column::NONE)
+                    if (tile.fully_cleared_long)
                     {
-                        draw_quad({449, 1}, {62, 62},
-                                  {column_position + 0.25, -(tile.position - level.position - 4.0F) - length +
-                                                               extra_length + 1.0F - circle_height * 0.5F},
-                                  {0.5F, circle_height}, matrix_level, glm::vec4{0.0F, 1.0F, 1.0F, 1.0F},
-                                  glm::vec4{0.0F, 1.0F, 1.0F, 1.0F});
+                        float alpha = glm::min(time_left / 0.2F, 1.0F);
+                        glm::vec4 color = glm::mix(CLEAR_BLUE, BLACK_CLEAR, alpha);
+                        draw_quad({460, 511}, {0, 0},
+                                  {column_position, -(tile.position - level.position - 4.0F) - length}, {1.0F, length},
+                                  matrix_level, color, color);
                     }
                     else
                     {
-                        float delta = tile.position_clicked - tile.position;
-                        float clearer = aspect_ratio * 0.25F;
-                        float delta_minus_clearer = delta - clearer;
-                        draw_quad({450, 100}, {128, 64},
-                                  {column_position, -(tile.position - level.position - 4.0F) - delta}, {1.0F, clearer},
-                                  matrix_level, CLEAR_BLUE, CLEAR_BLUE);
+                        float extra_length = length - 1.5F;
+                        float circle_height = 0.5 * aspect_ratio;
+                        // float how_much_cleared = 0.1F;
+                        // 449,1  62,62
                         draw_quad({460, 511}, {0, 0},
-                                  {column_position, -(tile.position - level.position - 4.0F) - delta_minus_clearer},
-                                  {1.0F, delta_minus_clearer}, matrix_level, CLEAR_BLUE, TOP_BLUE);
+                                  {column_position, -(tile.position - level.position - 4.0F) - length},
+                                  {1.0F, extra_length}, matrix_level, TOP_BLUE, BOTTOM_BLUE);
+                        draw_quad({460, 511}, {0, 0},
+                                  {column_position, -(tile.position - level.position - 4.0F) - length + extra_length},
+                                  {1.0F, 1.0F}, matrix_level, BOTTOM_BLUE, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
+                        draw_quad(
+                            {460, 511}, {0, 0},
+                            {column_position, -(tile.position - level.position - 4.0F) - length + extra_length + 1.0F},
+                            {1.0F, 0.5F}, matrix_level, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F},
+                            glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
+                        if (tile.cleared_column == Column::NONE)
+                        {
+                            draw_quad({449, 1}, {62, 62},
+                                      {column_position + 0.25, -(tile.position - level.position - 4.0F) - length +
+                                                                   extra_length + 1.0F - circle_height * 0.5F},
+                                      {0.5F, circle_height}, matrix_level, glm::vec4{0.0F, 1.0F, 1.0F, 1.0F},
+                                      glm::vec4{0.0F, 1.0F, 1.0F, 1.0F});
+                        }
+                        else
+                        {
+                            float delta = tile.position_clicked - tile.position;
+                            float clearer = aspect_ratio * 0.25F;
+                            float delta_minus_clearer = delta - clearer;
+                            draw_quad({450, 100}, {128, 64},
+                                      {column_position, -(tile.position - level.position - 4.0F) - delta},
+                                      {1.0F, clearer}, matrix_level, CLEAR_BLUE, CLEAR_BLUE);
+                            draw_quad({460, 511}, {0, 0},
+                                      {column_position, -(tile.position - level.position - 4.0F) - delta_minus_clearer},
+                                      {1.0F, delta_minus_clearer}, matrix_level, CLEAR_BLUE, TOP_BLUE);
+                        }
+                    }
+
+                    // draw_quad({460,511}, {0, 0}, {float(tile.id%4), -(tile.position-level.position - 4.0F) -
+                    // how_much_cleared}, {1.0F, how_much_cleared}, matrix_level, CLEAR_BLUE, TOP_BLUE);
+                }
+                else if (type == TileInfo::Type::SINGLE)
+                {
+                    draw_single_tile(column_position, -(tile.position - level.position - 4.0F) - length, length,
+                                     tile.cleared_column != Column::NONE ? std::optional<float>(time_left)
+                                                                         : std::nullopt);
+                    /*if (tile.cleared_column == Column::NONE)
+                    {
+                        draw_quad({460, 511}, {0, 0}, {column_position, -(tile.position - level.position - 4.0F) -
+                    length}, {1.0F, length}, matrix_level, BLACK, BLACK);
+                    }
+                    else
+                    {
+                        draw_quad({460, 511}, {0, 0}, {column_position, -(tile.position - level.position - 4.0F) -
+                    length}, {1.0F, length}, matrix_level, CLEAR_TILE, CLEAR_TILE);
+                    }*/
+                }
+                else if (type == TileInfo::Type::DOUBLE)
+                {
+                    float time_right = std::chrono::duration<float>(tp_new - tile.time_clicked_right).count();
+                    if (tile.column == Column::DT_LEFT)
+                    {
+                        draw_single_tile(0.0F, -(tile.position - level.position - 4.0F) - length, length,
+                                         (unsigned(tile.cleared_column) & unsigned(Column::FAR_LEFT))
+                                             ? std::optional<float>(time_left)
+                                             : std::nullopt);
+                        draw_single_tile(2.0F, -(tile.position - level.position - 4.0F) - length, length,
+                                         (unsigned(tile.cleared_column) & unsigned(Column::CENTER_RIGHT))
+                                             ? std::optional<float>(time_right)
+                                             : std::nullopt);
+                    }
+                    else
+                    {
+                        draw_single_tile(1.0F, -(tile.position - level.position - 4.0F) - length, length,
+                                         (unsigned(tile.cleared_column) & unsigned(Column::CENTER_LEFT))
+                                             ? std::optional<float>(time_left)
+                                             : std::nullopt);
+                        draw_single_tile(3.0F, -(tile.position - level.position - 4.0F) - length, length,
+                                         (unsigned(tile.cleared_column) & unsigned(Column::FAR_RIGHT))
+                                             ? std::optional<float>(time_right)
+                                             : std::nullopt);
                     }
                 }
-
-                // draw_quad({460,511}, {0, 0}, {float(tile.id%4), -(tile.position-level.position - 4.0F) -
-                // how_much_cleared}, {1.0F, how_much_cleared}, matrix_level, CLEAR_BLUE, TOP_BLUE);
             }
-            else if (type == TileInfo::Type::SINGLE)
+            // draw game over column
+            if (level.game_over_column && level.game_over_column != Column::NONE)
             {
-                draw_single_tile(column_position, -(tile.position - level.position - 4.0F) - length, length,
-                                 tile.cleared_column != Column::NONE ? std::optional<float>(time_left) : std::nullopt);
-                /*if (tile.cleared_column == Column::NONE)
+                Tile* tile = level.get_active_tile();
+                float duration_count = std::chrono::duration<float>(tp_new - level.time_game_over).count();
+                float alpha = glm::sqrt(glm::abs(glm::sin(duration_count * 3.1415F * 2.0F)));
                 {
-                    draw_quad({460, 511}, {0, 0}, {column_position, -(tile.position - level.position - 4.0F) - length},
-                              {1.0F, length}, matrix_level, BLACK, BLACK);
-                }
-                else
-                {
-                    draw_quad({460, 511}, {0, 0}, {column_position, -(tile.position - level.position - 4.0F) - length},
-                              {1.0F, length}, matrix_level, CLEAR_TILE, CLEAR_TILE);
-                }*/
-            }
-            else if (type == TileInfo::Type::DOUBLE)
-            {
-                float time_right = std::chrono::duration<float>(tp_new - tile.time_clicked_right).count();
-                if (tile.column == Column::DT_LEFT)
-                {
-                    draw_single_tile(0.0F, -(tile.position - level.position - 4.0F) - length, length,
-                                     (unsigned(tile.cleared_column) & unsigned(Column::FAR_LEFT))
-                                         ? std::optional<float>(time_left)
-                                         : std::nullopt);
-                    draw_single_tile(2.0F, -(tile.position - level.position - 4.0F) - length, length,
-                                     (unsigned(tile.cleared_column) & unsigned(Column::CENTER_RIGHT))
-                                         ? std::optional<float>(time_right)
-                                         : std::nullopt);
-                }
-                else
-                {
-                    draw_single_tile(1.0F, -(tile.position - level.position - 4.0F) - length, length,
-                                     (unsigned(tile.cleared_column) & unsigned(Column::CENTER_LEFT))
-                                         ? std::optional<float>(time_left)
-                                         : std::nullopt);
-                    draw_single_tile(3.0F, -(tile.position - level.position - 4.0F) - length, length,
-                                     (unsigned(tile.cleared_column) & unsigned(Column::FAR_RIGHT))
-                                         ? std::optional<float>(time_right)
-                                         : std::nullopt);
+                    float column_position = column_to_position(*level.game_over_column);
+                    float length = float(level.song_info.get_tiles()[tile->id].get_unit_length()) /
+                                   float(level.song_info.get_length_units_per_single_tile());
+                    draw_quad({460, 511}, {0, 0}, {column_position, -(tile->position - level.position - 4.0F) - length},
+                              {1.0F, length}, matrix_level, glm::vec4{1.0, 0.047, 0.047, alpha},
+                              glm::vec4{1.0, 0.047, 0.047, alpha});
                 }
             }
-        }
-        // draw game over column
-        if (level.game_over_column && level.game_over_column != Column::NONE)
-        {
-            Tile* tile = level.get_active_tile();
-            float duration_count = std::chrono::duration<float>(tp_new - level.time_game_over).count();
-            float alpha = glm::sqrt(glm::abs(glm::sin(duration_count * 3.1415F * 2.0F)));
+
+            // 276, 532, 32, 32
+            /*draw_text_debug({32, 32}, "Score: " + std::to_string(level.score), matrix_test, 2.0F,
+                      glm::vec4{1.0, 0.047, 0.047, 1.0});
+            draw_text_debug({32, 32 + 64}, "  TPS: " + std::to_string(level.tempo), matrix_test, 2.0F,
+                      glm::vec4{1.0, 0.047, 0.047, 1.0});
+            draw_text_debug({32, 32}, "FPS: " + std::to_string(glm::floor(1.0F / delta_time)), matrix_test, 2.0F,
+                      glm::vec4{1.0, 0.047, 0.047, 1.0});*/
+            /*draw_text_ascii(font, {32,64}, "Score: " + std::to_string(level.score), matrix_test, 0.001F,
+            glm::vec4(0.0F, 0.0F, 0.0F, 1.0F), 0.9); draw_text_ascii(font, {32,64}, "Score: " +
+            std::to_string(level.score), matrix_test, 0.001F, glm::vec4(1.0F, 0.1F, 0.1F, 1.0F)); draw_text_ascii(font,
+            {32,64+64}, "TPS: " + std::to_string(level.tempo), matrix_test, 0.001F, glm::vec4(0.0F, 0.0F, 0.0F, 1.0F),
+            0.9); draw_text_ascii(font, {32,64+64}, "TPS: " + std::to_string(level.tempo), matrix_test, 0.001F,
+            glm::vec4(1.0F, 0.1F, 0.1F, 1.0F));*/
+            std::string string_score{std::to_string(level.score_display)};
+            std::string string_tps{std::to_string(level.tempo)};
+            if (string_tps.size() > 5)
             {
-                float column_position = column_to_position(*level.game_over_column);
-                float length = float(level.song_info.get_tiles()[tile->id].get_unit_length()) /
-                               float(level.song_info.get_length_units_per_single_tile());
-                draw_quad({460, 511}, {0, 0}, {column_position, -(tile->position - level.position - 4.0F) - length},
-                          {1.0F, length}, matrix_level, glm::vec4{1.0, 0.047, 0.047, alpha},
-                          glm::vec4{1.0, 0.047, 0.047, alpha});
+                string_tps = string_tps.substr(0, 5);
             }
-        }
-
-        // 276, 532, 32, 32
-        /*draw_text_debug({32, 32}, "Score: " + std::to_string(level.score), matrix_test, 2.0F,
-                  glm::vec4{1.0, 0.047, 0.047, 1.0});
-        draw_text_debug({32, 32 + 64}, "  TPS: " + std::to_string(level.tempo), matrix_test, 2.0F,
-                  glm::vec4{1.0, 0.047, 0.047, 1.0});
-        draw_text_debug({32, 32}, "FPS: " + std::to_string(glm::floor(1.0F / delta_time)), matrix_test, 2.0F,
-                  glm::vec4{1.0, 0.047, 0.047, 1.0});*/
-        /*draw_text_ascii(font, {32,64}, "Score: " + std::to_string(level.score), matrix_test, 0.001F, glm::vec4(0.0F,
-        0.0F, 0.0F, 1.0F), 0.9); draw_text_ascii(font, {32,64}, "Score: " + std::to_string(level.score), matrix_test,
-        0.001F, glm::vec4(1.0F, 0.1F, 0.1F, 1.0F)); draw_text_ascii(font, {32,64+64}, "TPS: " +
-        std::to_string(level.tempo), matrix_test, 0.001F, glm::vec4(0.0F, 0.0F, 0.0F, 1.0F), 0.9); draw_text_ascii(font,
-        {32,64+64}, "TPS: " + std::to_string(level.tempo), matrix_test, 0.001F, glm::vec4(1.0F, 0.1F, 0.1F, 1.0F));*/
-        std::string string_score{std::to_string(level.score_display)};
-        std::string string_tps{std::to_string(level.tempo)};
-        if (string_tps.size() > 5)
-        {
-            string_tps = string_tps.substr(0, 5);
-        }
-        // float string_song_name_length = get_length_text_ascii(font, level.song_name, 0.0000015F);
-        // float string_song_composer_length = get_length_text_ascii(font, level.song_composer, 0.000001F);
-        float progress_idle = std::chrono::duration<float>(tp_new - level.time_song_started).count() * 5.0F;
-        bool really_idle = (level.idle && level.revives_used == 0);
-        if (really_idle || progress_idle < 1.0F)
-        {
-            float powed = glm::pow(progress_idle, 2.0F);
-            std::string best_string = "Best: " + std::to_string(level.best_score);
-            float string_best_score_length = get_length_text_ascii(font, best_string, 0.000001F);
-            draw_quad({460, 511}, {0, 0}, {0.0F, really_idle ? 3.0F : 3.0F + progress_idle * 4.0F}, {4.0F, 1.0F},
-                      matrix_level);
-            draw_text_ascii(font, {0.125F * 0.5F, 0.875F / aspect_ratio + 0.05F}, level.song_composer, matrix_aspect,
-                            0.000001F, glm::vec4(0.4F, 0.4F, 0.4F, 1.0F), glm::vec4(0.4F, 0.4F, 0.4F, 1.0F),
-                            really_idle ? 0.5F : 0.5F - powed * 0.5F);
-            draw_text_ascii(font, {1.0F - 0.5F * 0.125F - string_best_score_length, 0.875F / aspect_ratio + 0.05F},
-                            best_string, matrix_aspect, 0.000001F, glm::vec4(1.0F, 0.1F, 0.1F, 1.0F),
-                            glm::vec4(1.0F, 0.2F, 0.2F, 1.0F), really_idle ? 0.5F : 0.5F - powed * 0.5F);
-            draw_text_ascii(font, {0.125F * 0.5F, 0.875F / aspect_ratio - 0.01F}, level.song_name, matrix_aspect,
-                            0.0000015F, glm::vec4(0.00F, 0.0F, 0.0F, 1.0F), glm::vec4(0.0F, 0.0F, 0.0F, 1.0F),
-                            really_idle ? 0.5F : 0.5F - powed * 0.5F);
-            float offset = glm::sin(total_time * 3.1415F) * 0.05F;
-            draw_quad({870, 128}, {128, 128},
-                      {0.25F + offset - (really_idle ? 0.0F : powed), 0.5F - 0.25F * aspect_ratio},
-                      {0.5F, 0.5F * aspect_ratio}, matrix_level, glm::vec4(1.0F, 0.1F, 0.1F, 0.5F),
-                      glm::vec4(1.0F, 0.1F, 0.1F, 0.8F));
-            draw_quad({870, 0}, {128, 128},
-                      {3.25F - offset + (really_idle ? 0.0F : powed), 0.5F - 0.25F * aspect_ratio},
-                      {0.5F, 0.5F * aspect_ratio}, matrix_level, glm::vec4(1.0F, 0.1F, 0.1, 0.5F),
-                      glm::vec4(1.0F, 0.1F, 0.1F, 0.8F));
-        }
-        if (really_idle)
-        {
-            string_score = string_tps;
-            string_tps = "Starting TPS";
-        }
-        float additional_score_size =
-            (0.05F - glm::min(std::chrono::duration<float>(tp_new - level.time_last_score_update).count(), 0.05F)) *
-                0.00001F +
-            0.000003F;
-        float string_score_length = get_length_text_ascii(font, string_score, additional_score_size);
-        float string_tps_length = get_length_text_ascii(font, string_tps, 0.0000015F);
-        bool draw_score = !level.idle || level.revives_used > 0;
-        draw_text_ascii(font, {0.5F - string_score_length * 0.5F, 0.125F / aspect_ratio}, string_score, matrix_aspect,
-                        additional_score_size, glm::vec4(0.0F, 0.0F, 0.0F, 1.0F), glm::vec4(0.0F, 0.0F, 0.0F, 1.0F),
-                        0.9);
-        draw_text_ascii(font, {0.5F - string_tps_length * 0.5F, 0.125F / aspect_ratio + 0.09}, string_tps, matrix_aspect,
-                        0.0000015F, glm::vec4(0.0F, 0.0F, 0.0F, 1.0F), glm::vec4(0.0F, 0.0F, 0.0F, 1.0F), 0.9);
-        glm::vec4 color =
-            level.speed_modifier == 0 ? glm::vec4(1.0F, 0.1F, 0.1F, 1.0F) : glm::vec4(0.9F, 0.9F, 0.1F, 1.0F);
-        if (level.speed_modifier < 0)
-        {
-            color = glm::vec4(0.1F, 0.9F, 0.1F, 1.0F);
-        }
-        draw_text_ascii(font, {0.5F - string_score_length * 0.5F, 0.125F / aspect_ratio}, string_score, matrix_aspect,
-                        additional_score_size, color, color);
-        draw_text_ascii(font, {0.5 - string_tps_length * 0.5F, 0.125F / aspect_ratio + 0.09}, string_tps, matrix_aspect,
-                        0.0000015F, glm::vec4(1.0F, 0.9F, 0.9F, 1.0F), glm::vec4(1.0F, 1.0F, 1.0F, 1.0F));
-        /*if (level.idle)
-        {draw_text_debug({32, 32 + 128+64}, "Reviv: " + std::to_string(3 - level.revives_used), matrix_test, 2.0F,
-                  glm::vec4{1.0, 0.047, 0.047, 1.0});}*/
-        // draw_text_debug({32, 32+128}, "Tiles: " + std::to_string(level.tiles.size()), matrix_test, 2.0F);
-
-        glClear(GL_COLOR_BUFFER_BIT /*| GL_DEPTH_BUFFER_BIT*/);
-
-        // draw background
-        glBindVertexArray(vao_background);
-        glUseProgram(program_background);
-        glUniform1f(uniform_location_background_time, total_time);
-        static float background_id = 0.0F;
-        if (background_id != level.background_id)
-        {
-            background_id += delta_time * glm::sign(level.background_id - background_id);
-            background_id = glm::min(background_id, level.background_id);
-            glUniform1f(uniform_location_background_id, background_id);
-        }
-        glDisable(GL_BLEND);
-        glDrawElements(GL_TRIANGLES, buffer_ebo_background.size(), GL_UNSIGNED_BYTE, 0);
-
-        // draw basic
-        glBindVertexArray(vao_basic);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo_basic);
-        glUseProgram(program_basic);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, buffer_vbo_basic.size() * sizeof(GLfloat), buffer_vbo_basic.data());
-        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, buffer_ebo_basic.size() * sizeof(GLushort),
-                        buffer_ebo_basic.data());
-        glEnable(GL_BLEND);
-        glDrawElements(GL_TRIANGLES, buffer_ebo_basic.size(), GL_UNSIGNED_SHORT, 0);
-
-        // draw helper
-        Tile* active_tile = level.get_active_tile();
-        if (!level.game_over_column && active_tile)
-        {
-            const float tile_length = float(level.song_info.get_tiles()[active_tile->id].get_unit_length()) /
-                                      float(level.song_info.get_length_units_per_single_tile());
-            bool is_double_tile = level.song_info.get_tiles()[active_tile->id].get_type() == TileInfo::Type::DOUBLE;
-            float column_position = is_double_tile ? (active_tile->column == Column::DT_LEFT ? 0.0 : 1.0)
-                                                   : column_to_position(active_tile->column);
-            glm::vec4 position_a =
-                matrix_level *
-                glm::vec4(column_position, -active_tile->position - tile_length + level.position + 4.0F, 0.0, 1.0);
-            glm::vec4 position_c = matrix_level * glm::vec4(column_position + 1.0,
-                                                            -active_tile->position + level.position + 4.0F, 0.0, 1.0);
-            buffer_vbo_helper = {
-                position_a.x,        position_a.y, 0.0, 0.0, position_c.x,        position_a.y, 1.0, 0.0,
-                position_c.x,        position_c.y, 1.0, 1.0, position_a.x,        position_c.y, 0.0, 1.0,
-                position_a.x + 1.0F, position_a.y, 0.0, 0.0, position_c.x + 1.0F, position_a.y, 1.0, 0.0,
-                position_c.x + 1.0F, position_c.y, 1.0, 1.0, position_a.x + 1.0F, position_c.y, 0.0, 1.0,
-            };
-            glBindVertexArray(vao_helper);
-            glBindBuffer(GL_ARRAY_BUFFER, vbo_helper);
-            glUseProgram(program_helper);
-            static float last_tile_length = 1.0F;
-            float alpha = std::min(
-                glm::pow(std::chrono::duration<float>(tp_new - level.tile_full_time_clicked).count() * level.tempo,
-                         2.0F),
-                1.0F);
-            static float last_alpha = 0.0F;
-            if (alpha != last_alpha)
+            // float string_song_name_length = get_length_text_ascii(font, level.song_name, 0.0000015F);
+            // float string_song_composer_length = get_length_text_ascii(font, level.song_composer, 0.000001F);
+            float progress_idle = std::chrono::duration<float>(tp_new - level.time_song_started).count() * 5.0F;
+            bool really_idle = (level.idle && level.revives_used == 0);
+            if (really_idle || progress_idle < 1.0F)
             {
-                last_alpha = alpha;
-                glUniform1f(uniform_location_helper_alpha, alpha);
+                float powed = glm::pow(progress_idle, 2.0F);
+                std::string best_string = "Best: " + std::to_string(level.best_score);
+                float string_best_score_length = get_length_text_ascii(font, best_string, 0.000001F);
+                draw_quad({460, 511}, {0, 0}, {0.0F, really_idle ? 3.0F : 3.0F + progress_idle * 4.0F}, {4.0F, 1.0F},
+                          matrix_level);
+                draw_text_ascii(font, {0.125F * 0.5F, 0.875F / aspect_ratio + 0.05F}, level.song_composer,
+                                matrix_aspect, 0.000001F, glm::vec4(0.4F, 0.4F, 0.4F, 1.0F),
+                                glm::vec4(0.4F, 0.4F, 0.4F, 1.0F), really_idle ? 0.5F : 0.5F - powed * 0.5F);
+                draw_text_ascii(font, {1.0F - 0.5F * 0.125F - string_best_score_length, 0.875F / aspect_ratio + 0.05F},
+                                best_string, matrix_aspect, 0.000001F, glm::vec4(1.0F, 0.1F, 0.1F, 1.0F),
+                                glm::vec4(1.0F, 0.2F, 0.2F, 1.0F), really_idle ? 0.5F : 0.5F - powed * 0.5F);
+                draw_text_ascii(font, {0.125F * 0.5F, 0.875F / aspect_ratio - 0.01F}, level.song_name, matrix_aspect,
+                                0.0000015F, glm::vec4(0.00F, 0.0F, 0.0F, 1.0F), glm::vec4(0.0F, 0.0F, 0.0F, 1.0F),
+                                really_idle ? 0.5F : 0.5F - powed * 0.5F);
+                float offset = glm::sin(total_time * 3.1415F) * 0.05F;
+                draw_quad({870, 128}, {128, 128},
+                          {0.25F + offset - (really_idle ? 0.0F : powed), 0.5F - 0.25F * aspect_ratio},
+                          {0.5F, 0.5F * aspect_ratio}, matrix_level, glm::vec4(1.0F, 0.1F, 0.1F, 0.5F),
+                          glm::vec4(1.0F, 0.1F, 0.1F, 0.8F));
+                draw_quad({870, 0}, {128, 128},
+                          {3.25F - offset + (really_idle ? 0.0F : powed), 0.5F - 0.25F * aspect_ratio},
+                          {0.5F, 0.5F * aspect_ratio}, matrix_level, glm::vec4(1.0F, 0.1F, 0.1, 0.5F),
+                          glm::vec4(1.0F, 0.1F, 0.1F, 0.8F));
             }
-            if (tile_length != last_tile_length)
+            if (really_idle)
             {
-                last_tile_length = tile_length;
-                glUniform1f(uniform_location_helper_tile_length, tile_length);
+                string_score = string_tps;
+                string_tps = "Starting TPS";
             }
-            glUniform1f(uniform_location_helper_time, total_time);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, buffer_vbo_helper.size() * sizeof(GLfloat), buffer_vbo_helper.data());
-            glDrawElements(
-                GL_TRIANGLES, (is_double_tile && active_tile->cleared_column == Column::NONE) ? 12 : 6,
-                GL_UNSIGNED_BYTE,
-                reinterpret_cast<void*>((is_double_tile && (unsigned(active_tile->cleared_column) & 0b1100)) ? 6 : 0));
-        }
-        // draw SDF
-        // glDisable(GL_BLEND);
-        glBindVertexArray(vao_sdf);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo_sdf);
-        glUseProgram(program_sdf);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, buffer_vbo_sdf.size() * sizeof(GLfloat), buffer_vbo_sdf.data());
-        glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, buffer_ebo_sdf.size() * sizeof(GLushort), buffer_ebo_sdf.data());
-        glDrawElements(GL_TRIANGLES, buffer_ebo_sdf.size(), GL_UNSIGNED_SHORT, 0);
+            float additional_score_size =
+                (0.05F - glm::min(std::chrono::duration<float>(tp_new - level.time_last_score_update).count(), 0.05F)) *
+                    0.00001F +
+                0.000003F;
+            float string_score_length = get_length_text_ascii(font, string_score, additional_score_size);
+            float string_tps_length = get_length_text_ascii(font, string_tps, 0.0000015F);
+            bool draw_score = !level.idle || level.revives_used > 0;
+            draw_text_ascii(font, {0.5F - string_score_length * 0.5F, 0.125F / aspect_ratio}, string_score,
+                            matrix_aspect, additional_score_size, glm::vec4(0.0F, 0.0F, 0.0F, 1.0F),
+                            glm::vec4(0.0F, 0.0F, 0.0F, 1.0F), 0.9);
+            draw_text_ascii(font, {0.5F - string_tps_length * 0.5F, 0.125F / aspect_ratio + 0.09}, string_tps,
+                            matrix_aspect, 0.0000015F, glm::vec4(0.0F, 0.0F, 0.0F, 1.0F),
+                            glm::vec4(0.0F, 0.0F, 0.0F, 1.0F), 0.9);
+            glm::vec4 color =
+                level.speed_modifier == 0 ? glm::vec4(1.0F, 0.1F, 0.1F, 1.0F) : glm::vec4(0.9F, 0.9F, 0.1F, 1.0F);
+            if (level.speed_modifier < 0)
+            {
+                color = glm::vec4(0.1F, 0.9F, 0.1F, 1.0F);
+            }
+            draw_text_ascii(font, {0.5F - string_score_length * 0.5F, 0.125F / aspect_ratio}, string_score,
+                            matrix_aspect, additional_score_size, color, color);
+            draw_text_ascii(font, {0.5 - string_tps_length * 0.5F, 0.125F / aspect_ratio + 0.09}, string_tps,
+                            matrix_aspect, 0.0000015F, glm::vec4(1.0F, 0.9F, 0.9F, 1.0F),
+                            glm::vec4(1.0F, 1.0F, 1.0F, 1.0F));
+            /*if (level.idle)
+            {draw_text_debug({32, 32 + 128+64}, "Reviv: " + std::to_string(3 - level.revives_used), matrix_test, 2.0F,
+                      glm::vec4{1.0, 0.047, 0.047, 1.0});}*/
+            // draw_text_debug({32, 32+128}, "Tiles: " + std::to_string(level.tiles.size()), matrix_test, 2.0F);
 
-        SDL_GL_SwapWindow(window);
+            // draw background
+            glBindVertexArray(vao_background);
+            glUseProgram(program_background);
+            glUniform1f(uniform_location_background_time, total_time);
+            static float background_id = 0.0F;
+            if (background_id != level.background_id)
+            {
+                background_id += delta_time * glm::sign(level.background_id - background_id);
+                background_id = glm::min(background_id, level.background_id);
+                glUniform1f(uniform_location_background_id, background_id);
+            }
+            glDisable(GL_BLEND);
+            glDrawElements(GL_TRIANGLES, buffer_ebo_background.size(), GL_UNSIGNED_BYTE, 0);
+
+            // draw basic
+            glBindVertexArray(vao_basic);
+            glBindBuffer(GL_ARRAY_BUFFER, vbo_basic);
+            glUseProgram(program_basic);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, buffer_vbo_basic.size() * sizeof(GLfloat), buffer_vbo_basic.data());
+            glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, buffer_ebo_basic.size() * sizeof(GLushort),
+                            buffer_ebo_basic.data());
+            glEnable(GL_BLEND);
+            glDrawElements(GL_TRIANGLES, buffer_ebo_basic.size(), GL_UNSIGNED_SHORT, 0);
+
+            // draw helper
+            Tile* active_tile = level.get_active_tile();
+            if (!level.game_over_column && active_tile)
+            {
+                const float tile_length = float(level.song_info.get_tiles()[active_tile->id].get_unit_length()) /
+                                          float(level.song_info.get_length_units_per_single_tile());
+                bool is_double_tile = level.song_info.get_tiles()[active_tile->id].get_type() == TileInfo::Type::DOUBLE;
+                float column_position = is_double_tile ? (active_tile->column == Column::DT_LEFT ? 0.0 : 1.0)
+                                                       : column_to_position(active_tile->column);
+                glm::vec4 position_a =
+                    matrix_level *
+                    glm::vec4(column_position, -active_tile->position - tile_length + level.position + 4.0F, 0.0, 1.0);
+                glm::vec4 position_c =
+                    matrix_level *
+                    glm::vec4(column_position + 1.0, -active_tile->position + level.position + 4.0F, 0.0, 1.0);
+                buffer_vbo_helper = {
+                    position_a.x,        position_a.y, 0.0, 0.0, position_c.x,        position_a.y, 1.0, 0.0,
+                    position_c.x,        position_c.y, 1.0, 1.0, position_a.x,        position_c.y, 0.0, 1.0,
+                    position_a.x + 1.0F, position_a.y, 0.0, 0.0, position_c.x + 1.0F, position_a.y, 1.0, 0.0,
+                    position_c.x + 1.0F, position_c.y, 1.0, 1.0, position_a.x + 1.0F, position_c.y, 0.0, 1.0,
+                };
+                glBindVertexArray(vao_helper);
+                glBindBuffer(GL_ARRAY_BUFFER, vbo_helper);
+                glUseProgram(program_helper);
+                static float last_tile_length = 1.0F;
+                float alpha = std::min(
+                    glm::pow(std::chrono::duration<float>(tp_new - level.tile_full_time_clicked).count() * level.tempo,
+                             2.0F),
+                    1.0F);
+                static float last_alpha = 0.0F;
+                if (alpha != last_alpha)
+                {
+                    last_alpha = alpha;
+                    glUniform1f(uniform_location_helper_alpha, alpha);
+                }
+                if (tile_length != last_tile_length)
+                {
+                    last_tile_length = tile_length;
+                    glUniform1f(uniform_location_helper_tile_length, tile_length);
+                }
+                glUniform1f(uniform_location_helper_time, total_time);
+                glBufferSubData(GL_ARRAY_BUFFER, 0, buffer_vbo_helper.size() * sizeof(GLfloat),
+                                buffer_vbo_helper.data());
+                glDrawElements(GL_TRIANGLES, (is_double_tile && active_tile->cleared_column == Column::NONE) ? 12 : 6,
+                               GL_UNSIGNED_BYTE,
+                               reinterpret_cast<void*>(
+                                   (is_double_tile && (unsigned(active_tile->cleared_column) & 0b1100)) ? 6 : 0));
+            }
+            // draw SDF
+            // glDisable(GL_BLEND);
+            glBindVertexArray(vao_sdf);
+            glBindBuffer(GL_ARRAY_BUFFER, vbo_sdf);
+            glUseProgram(program_sdf);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, buffer_vbo_sdf.size() * sizeof(GLfloat), buffer_vbo_sdf.data());
+            glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, buffer_ebo_sdf.size() * sizeof(GLushort),
+                            buffer_ebo_sdf.data());
+            glDrawElements(GL_TRIANGLES, buffer_ebo_sdf.size(), GL_UNSIGNED_SHORT, 0);
+            SDL_GL_SwapWindow(window);
+        }
+        else if (state == State::SONG_SELECT)
+        {
+            if (!menu_scrolling && scroll_velocity != 0.0F)
+            {
+                current_scroll += scroll_velocity * delta_time;
+
+                float friction = 2.0f; // higher = stronger slowdown
+                scroll_velocity *= glm::exp(-friction * delta_time);
+
+                if (glm::abs(scroll_velocity) < 0.0001F)
+                {
+                    scroll_velocity = 0.0F;
+                }
+                current_scroll =
+                    glm::clamp(current_scroll, 0.0F, glm::max(0.0F, max_scroll_size - 1.0F / aspect_ratio));
+                mvp = matrix_aspect * glm::translate(glm::mat4{1.0F}, glm::vec3{0.0F, -current_scroll, 0.0F});
+            }
+
+            // draw_text_ascii(font, {0.0F, 0.5F}, "TEST",
+            //                 matrix_aspect, 0.00001); //326px on 1000px resolution
+            // 1 = 32600000px
+            // jak chcę 20px to 20px/32600000 = 6.13496933e-7
+
+            // render songs
+            for (unsigned i = 0; i < total_songs; ++i)
+            {
+                draw_quad({500, 700}, {150, 220}, {10.0F / 1000.0F, 20.0F / 1000.0F + 0.24F * i},
+                          {150.0F / 1000.0F, 220.0F / 1000.0F}, mvp);
+                draw_quad({460, 511}, {0, 0}, {160.0F / 1000.0F, 20.0F / 1000.0F + 0.24F * i},
+                          {830.0F / 1000.0F, 220.0F / 1000.0F}, mvp);
+                glm::vec4 button_color =
+                    (i == menu_focused_button) ? glm::vec4{0.6F, 0.6F, 0.6F, 1.0F} : glm::vec4{1.0F};
+                draw_quad({600, 0}, {192, 64}, {690.0F / 1000.0F, 140.0F / 1000.0F + 0.24F * i},
+                          {270.0F / 1000.0F, 80.0F / 1000.0F}, mvp, button_color, button_color);
+                draw_text_ascii(font, {30.0F / 1000.0F, 80.0F / 1000.0F + 0.24F * i}, std::to_string(i + 1), mvp,
+                                9.20245399e-7F, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F}, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
+                draw_text_ascii(font, {190.0F / 1000.0F, 80.0F / 1000.0F + 0.24F * i}, basic_song_infos.at(i).name, mvp,
+                                9.20245399e-7F, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F}, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
+                draw_text_ascii(font, {190.0F / 1000.0F, 125.0F / 1000.0F + 0.24F * i}, basic_song_infos.at(i).composer,
+                                mvp, 7.66871166e-7F, glm::vec4{0.4F, 0.4F, 0.4F, 1.0F},
+                                glm::vec4{0.4F, 0.4F, 0.4F, 1.0F});
+                float play_score_length = get_length_text_ascii(font, "Play", 9.20245399e-7F);
+                draw_text_ascii(
+                    font, {(690.0F + 270.0F * 0.5F) / 1000.0F - play_score_length * 0.5F, 195.0F / 1000.0F + 0.24F * i},
+                    "Play", mvp, 9.20245399e-7F, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F}, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
+            }
+ 
+            glEnable(GL_BLEND);
+            // draw basic
+            glBindVertexArray(vao_basic);
+            glBindBuffer(GL_ARRAY_BUFFER, vbo_basic);
+            glUseProgram(program_basic);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, buffer_vbo_basic.size() * sizeof(GLfloat), buffer_vbo_basic.data());
+            glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, buffer_ebo_basic.size() * sizeof(GLushort),
+                            buffer_ebo_basic.data());
+            glDrawElements(GL_TRIANGLES, buffer_ebo_basic.size(), GL_UNSIGNED_SHORT, 0);
+
+            // render SDF text
+            glBindVertexArray(vao_sdf);
+            glBindBuffer(GL_ARRAY_BUFFER, vbo_sdf);
+            glUseProgram(program_sdf);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, buffer_vbo_sdf.size() * sizeof(GLfloat), buffer_vbo_sdf.data());
+            glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, buffer_ebo_sdf.size() * sizeof(GLushort),
+                            buffer_ebo_sdf.data());
+            glDrawElements(GL_TRIANGLES, buffer_ebo_sdf.size(), GL_UNSIGNED_SHORT, 0);
+            SDL_GL_SwapWindow(window);
+        }
     }
 }

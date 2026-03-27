@@ -23,7 +23,7 @@
 [X] Tile animations
 [X] Revives
 [X] Cull face ON
-[ ] Correct tempo and PT2 formula
+[X] Correct tempo and PT2 formula
 [X] Helper correct timing on DT tiles
 [V] Optimization highp -> mediump
 [X] better long tiles
@@ -31,5 +31,18 @@
 [X] silent score counter
 [X] score counter bounce animation
 [V] .value() -> *
-[ ] Long tile cleared should be black like single tile
-[ ] 1s delta time should exit the song
+[X] Long tile cleared should be black like single tile
+[?] 1s delta time should exit the song
+[X] Scrolling of songs in menu
+[ ] OpenGL Buffer length monitor
+[ ] Background on google pixel is buggy
+[X] Button focusing
+[X] Make the banner ad SMALLER
+[ ] Add background in song select section
+[ ] SFX for clicking play
+[ ] .at() -> []
+[ ] score saving
+[ ] Full icon, not white letterbox
+[ ] always 3 decimals even if number is >= 10
+[ ] Long tile line
+[ ] Long tile audio effects circle

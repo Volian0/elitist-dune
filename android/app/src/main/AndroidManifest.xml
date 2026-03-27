@@ -53,6 +53,8 @@
     <!-- Allow access to the vibrator -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID"/> 
+
     <!-- Allow access to Internet -->
     <!-- if you want to connect to the network or internet, uncomment this. -->
     <!--
@@ -74,6 +76,10 @@
         android:enableOnBackInvokedCallback="false"
         android:screenOrientation="portrait"
         android:hardwareAccelerated="true" >
+
+        <meta-data
+        android:name="com.google.android.gms.ads.APPLICATION_ID"
+        android:value="ca-app-pub-3940256099942544~3347511713"/>
 
         <!-- Example of setting SDL hints from AndroidManifest.xml:
         <meta-data android:name="SDL_ENV.SDL_ANDROID_TRAP_BACK_BUTTON" android:value="0"/>

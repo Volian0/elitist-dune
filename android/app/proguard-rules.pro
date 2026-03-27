@@ -75,3 +75,15 @@
     void hapticRumble(int, float, float, int);
     void hapticStop(int);
 }
+
+# Prevent R8 from stripping WorkManager (internal to Play Services/Ads)
+-keep class androidx.work.** { *; }
+-keep class androidx.startup.** { *; }
+
+# Room is used by WorkManager internally; keep its database structure
+-keep class * extends androidx.room.RoomDatabase
+-dontwarn androidx.work.impl.**
+
+# Also common for Play Services Ads/Games
+-keep class com.google.android.gms.** { *; }
+-dontwarn com.google.android.gms.** 
