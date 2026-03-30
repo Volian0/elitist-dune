@@ -10,6 +10,7 @@
 #include <deque>
 #include <iostream>
 #include <mutex>
+#include <atomic>
 
 struct QueuedNoteEvent
 {
@@ -41,6 +42,7 @@ struct Soundfont
 
     void note_on(unsigned char t_key, unsigned char t_velocity)
     {
+        pcm = 1.0F;
         tsf_note_on(handle, 0, t_key, float(t_velocity) / 127.0F);
     }
 
@@ -94,6 +96,8 @@ struct Soundfont
     Soundfont& operator=(const Soundfont&) = delete;
     Soundfont(Soundfont&&) = delete;
     Soundfont& operator=(Soundfont&&) = delete;
+
+    std::atomic<float> pcm = 0.0F;
 
     tsf* handle;
     mutable std::mutex mutex;

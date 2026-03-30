@@ -746,6 +746,8 @@ int main(int, char*[])
             }
             for (const auto& tile : level.tiles)
             {
+                const auto type = level.song_info.get_tiles()[tile.id].get_type();
+                float column_position = column_to_position(tile.column);
                 if (level.game_over_column == Column::NONE && ticks_ms / 250 % 2 && &tile == &level.tiles[0])
                 {
                     continue;
@@ -753,8 +755,6 @@ int main(int, char*[])
                 // 460,511 0,0
                 float length = float(level.song_info.get_tiles()[tile.id].get_unit_length()) /
                                float(level.song_info.get_length_units_per_single_tile());
-                const auto type = level.song_info.get_tiles()[tile.id].get_type();
-                float column_position = column_to_position(tile.column);
                 float time_left = std::chrono::duration<float>(tp_new - tile.time_clicked_left).count();
                 if (type == TileInfo::Type::LONG)
                 {
@@ -783,8 +783,10 @@ int main(int, char*[])
                             {column_position, -(tile.position - level.position - 4.0F) - length + extra_length + 1.0F},
                             {1.0F, 0.5F}, matrix_level, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F},
                             glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
+                        draw_quad({449, 511}, {9, 0}, {(column_position+0.5F) - 0.02F * 0.5F, -(tile.position - level.position - 4.0F) - length + 0.5}, {0.02F, length - 1.0F}, matrix_level,
+                    CLEAR_BLUE_CLEAR, CLEAR_BLUE_CLEAR);
                         if (tile.cleared_column == Column::NONE)
-                        {
+                        { 
                             draw_quad({449, 1}, {62, 62},
                                       {column_position + 0.25, -(tile.position - level.position - 4.0F) - length +
                                                                    extra_length + 1.0F - circle_height * 0.5F},
@@ -796,12 +798,21 @@ int main(int, char*[])
                             float delta = tile.position_clicked - tile.position;
                             float clearer = aspect_ratio * 0.25F;
                             float delta_minus_clearer = delta - clearer;
+                            float alpha = glm::min(tile.position - tile.position_clicked + length, 0.5F);
                             draw_quad({450, 100}, {128, 64},
                                       {column_position, -(tile.position - level.position - 4.0F) - delta},
                                       {1.0F, clearer}, matrix_level, CLEAR_BLUE, CLEAR_BLUE);
                             draw_quad({460, 511}, {0, 0},
                                       {column_position, -(tile.position - level.position - 4.0F) - delta_minus_clearer},
                                       {1.0F, delta_minus_clearer}, matrix_level, CLEAR_BLUE, TOP_BLUE);
+                            if (level.focused_long_tile == &tile && tile.finger_id != 255)
+                            {
+                                float scale = glm::max(float(soundfont.pcm), 0.0F);
+                                draw_quad({449, 1}, {62, 62},
+                                      {column_position + 0.5F - scale * 0.25F, -(tile.position - level.position - 4.0F) - delta - circle_height * 0.5F * scale},
+                                      {0.5F * scale, circle_height * scale}, matrix_level, glm::vec4{0.0F, 1.0F, 1.0F, alpha},
+                                      glm::vec4{0.0F, 1.0F, 1.0F, alpha});
+                            }
                         }
                     }
 

@@ -67,6 +67,8 @@ struct Level
     float background_id = 0.0F;
     float starting_tps;
 
+    Tile* focused_long_tile = nullptr;
+
     void touch_down(const glm::vec2& t_mouse_position, unsigned char t_finger_id,
                     const std::chrono::steady_clock::time_point& t_time, Soundfont& t_soundfont)
     {
@@ -85,6 +87,7 @@ struct Level
         {
             if (first_hit)
             {
+                focused_long_tile = &tile;
                 if (tile.id == 0)
                 {
                     if (current_lap == 0)
@@ -240,6 +243,7 @@ struct Level
         }
         // move tiles
         position += tempo * t_delta_time;
+        t_soundfont.pcm -= tempo * t_delta_time;
 
         // spawn new tiles
         spawn_tiles();
@@ -314,16 +318,16 @@ struct Level
 
     void spawn_tiles()
     {
-        while (spawned_tile_length <= position + 4.0F)
+        while (float(spawned_tile_length)/float(song_info.get_length_units_per_single_tile()) <= position + 4.0F)
         {
             const TileInfo& tile_info = song_info.get_tiles()[spawned_tiles % song_info.get_tiles().size()];
             auto& tile = tiles.emplace_back();
             tile.id = spawned_tiles % song_info.get_tiles().size();
-            tile.position = spawned_tile_length;
+            tile.position = float(spawned_tile_length)/float(song_info.get_length_units_per_single_tile());
             tile.column = get_next_column(tile_info, distribution(rng));
             ++spawned_tiles;
             spawned_tile_length +=
-                float(tile_info.get_unit_length()) / float(song_info.get_length_units_per_single_tile());
+                tile_info.get_unit_length();
         }
     }
 
@@ -454,7 +458,7 @@ struct Level
     std::deque<Tile> tiles;
     bool idle{true};
     unsigned long spawned_tiles{0};
-    float spawned_tile_length{0.0F};
+    unsigned long long spawned_tile_length{0};
     unsigned long cleared_tiles{0};
     unsigned long score{0};
     unsigned long score_display{0};
@@ -517,7 +521,7 @@ struct Level
         tiles.clear();
         idle = true;
         spawned_tiles = 0;
-        spawned_tile_length = 0.0F;
+        spawned_tile_length = 0;
         cleared_tiles = 0;
         score = 0;
         score_display = 0;

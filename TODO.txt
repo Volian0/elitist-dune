@@ -16,7 +16,7 @@
 [X] rendering red missed column
 [X] queue note events
 [X] play queued note events
-[V] Game over C minor chord
+[X] Game over C minor chord
 [X] All notes off during level load and reset
 [X] Implement double tiles
 [ ] Correct timing in playing queued note events
@@ -44,5 +44,6 @@
 [ ] score saving
 [ ] Full icon, not white letterbox
 [ ] always 3 decimals even if number is >= 10
-[ ] Long tile line
-[ ] Long tile audio effects circle
+[X] Long tile line
+[V] Long tile audio effects circle
+[ ] Double tile missed correct rendering game over flashing
