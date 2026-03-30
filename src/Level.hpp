@@ -204,6 +204,8 @@ struct Level
         t_soundfont.note_on(60, 100);
     }
 
+    unsigned revive_dialog{false};
+
     void update(float t_delta_time, const std::chrono::steady_clock::time_point& t_time, Soundfont& t_soundfont)
     {
         if (game_over_column || idle)
@@ -235,7 +237,12 @@ struct Level
                     }
                     else
                     {
-                        revive(t_soundfont);
+                        //revive(t_soundfont);
+                        revive_dialog = true;
+                        if (std::chrono::duration<float>(t_time - time_game_over).count() >= 3.0F)
+                        {
+                            revive_dialog = 2;
+                        }
                     }
                 }
             }
@@ -471,6 +478,7 @@ struct Level
 
     void revive(Soundfont& t_soundfont)
     {
+        revive_dialog = false;
         for (auto& tile : tiles)
         {
             tile.finger_id = 255;
@@ -514,6 +522,7 @@ struct Level
 
     void reset(Soundfont& t_soundfont)
     {
+        revive_dialog = false;
         tempo = song_info.get_starting_tempo();
         game_over_column = std::nullopt;
         previous_column = protected_column = Column::NONE;

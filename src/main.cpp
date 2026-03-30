@@ -579,6 +579,30 @@ int main(int, char*[])
             {
                 if (state == State::LEVEL)
                 {
+                    if (level.revive_dialog)
+                    {
+                        float position = 1.0F / aspect_ratio * 0.5F + 0.1F;
+                        float size = 80.0F / 1000.0F;
+                        float size_x = 270.0F / 1000.0F;
+                        float position_x_revive = 115.0F / 1000.0F;
+                        float position_x_giveup = 615.0F / 1000.0F;
+                        if (event.tfinger.x >= position_x_revive
+                        && event.tfinger.x <= position_x_revive + size_x
+                    && event.tfinger.y / aspect_ratio >= position &&
+                        event.tfinger.y /aspect_ratio <= position + size)
+                        {
+                            level.revive(soundfont);
+                        }
+                        else if (level.revive_dialog == 2 &&
+                        event.tfinger.x >= position_x_giveup
+                        && event.tfinger.x <= position_x_giveup + size_x
+                    && event.tfinger.y / aspect_ratio >= position &&
+                        event.tfinger.y /aspect_ratio <= position + size)
+                        {
+                            state = State::SONG_SELECT;
+                        }
+                        continue;
+                    }
                     if (event.tfinger.y > 0.75F && level.idle)
                     {
                     }
@@ -895,7 +919,7 @@ int main(int, char*[])
             std::string string_tps{std::to_string(level.tempo)};
             if (string_tps.size() > 5)
             {
-                string_tps = string_tps.substr(0, 5);
+                string_tps = string_tps.substr(0, string_tps[2] == '.' ? 6 : 5);
             }
             // float string_song_name_length = get_length_text_ascii(font, level.song_name, 0.0000015F);
             // float string_song_composer_length = get_length_text_ascii(font, level.song_composer, 0.000001F);
@@ -956,6 +980,34 @@ int main(int, char*[])
             draw_text_ascii(font, {0.5 - string_tps_length * 0.5F, 0.125F / aspect_ratio + 0.09}, string_tps,
                             matrix_aspect, 0.0000015F, glm::vec4(1.0F, 0.9F, 0.9F, 1.0F),
                             glm::vec4(1.0F, 1.0F, 1.0F, 1.0F));
+            if (level.revive_dialog)
+            {
+                draw_quad({460, 511}, {0, 0}, {0.0F, 0.0F}, {4.0F, 4.0F},
+                          matrix_level, glm::vec4{0.0F, 0.0F, 0.0F, 0.5F}, glm::vec4{0.0F, 0.0F, 0.0F, 0.5F});
+                //draw_quad({460, 511}, {0, 0}, {0.0F, 2.0F - 1.0F * aspect_ratio}, {4.0F, 2.0F * aspect_ratio},
+                //          matrix_level);
+                float position = 1.0F / aspect_ratio * 0.5F - 0.25F;
+                draw_quad({460, 511}, {0, 0}, {0.0F, position}, {1.0F, 0.5F},
+                          matrix_aspect);
+                float revive_text_size = get_length_text_ascii(font, "You can do this!", 0.0000015F);
+                draw_text_ascii(font, {0.5F - revive_text_size * 0.5F, position + 0.125F}, "You can do this!",
+                           matrix_aspect, 0.0000015F, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F}, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
+                draw_quad({600, 0}, {192, 64}, {115.0F / 1000.0F, position + 0.25F + 0.1F},
+                          {270.0F / 1000.0F, 80.0F / 1000.0F}, matrix_aspect, glm::vec4{0.5F, 1.0F, 1.0F, 1.0F});
+                float ad_text_size = get_length_text_ascii(font, "Revive for ad", 9.20245399e-7F);
+                float giveup_text_size = get_length_text_ascii(font, "Give up", 9.20245399e-7F);
+                draw_text_ascii(
+                    font, {(115.0F + 270.0F * 0.5F) / 1000.0F - ad_text_size * 0.5F, position + 0.25F + 0.1F + 55.0F / 1000.0F},
+                    "Revive for ad", matrix_aspect, 9.20245399e-7F, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F}, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
+                if (level.revive_dialog == 2)
+                { 
+                    draw_quad({600, 0}, {192, 64}, {615.0F/ 1000.0F, position + 0.25F + 0.1F},
+                            {270.0F / 1000.0F, 80.0F / 1000.0F}, matrix_aspect, glm::vec4{1.0F, 0.5F, 0.5F, 1.0F});
+                    draw_text_ascii(
+                        font, {(615.0F + 270.0F * 0.5F) / 1000.0F - giveup_text_size * 0.5F, position + 0.25F + 0.1F + 55.0F / 1000.0F},
+                        "Give up", matrix_aspect, 9.20245399e-7F, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F}, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
+                }
+            }
             /*if (level.idle)
             {draw_text_debug({32, 32 + 128+64}, "Reviv: " + std::to_string(3 - level.revives_used), matrix_test, 2.0F,
                       glm::vec4{1.0, 0.047, 0.047, 1.0});}*/
