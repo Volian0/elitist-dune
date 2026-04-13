@@ -2,11 +2,19 @@
     {
         "name": "Maple Leaf Rag",
         "composer": "Scott Joplin",
-        "file": "Maple Leaf Rag.usong"
+        "file": "Maple Leaf Rag.usong",
+        "id": "CgkIi6KI368bEAIQAQ"
     },
     {
         "name": "Sinfonia No. 2",
         "composer": "Johann Sebastian Bach",
-        "file": "Sinfonia No.2.usong"
+        "file": "Sinfonia No.2.usong",
+        "id": "CgkIi6KI368bEAIQAg"
+    },
+    {
+        "name": "Gypsy Rondo",
+        "composer": "Joseph Haydn",
+        "file": "Gypsy Rondo.usong",
+        "id": "CgkIi6KI368bEAIQAw"
     }
 ]

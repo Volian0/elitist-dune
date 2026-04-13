@@ -57,7 +57,8 @@ public:
         SINGLE,
         LONG,
         DOUBLE,
-        EMPTY
+        EMPTY,
+        SLIDER
     };
 
     TileInfo(SDL_IOStream* t_stream);
@@ -128,4 +129,11 @@ struct BasicSongInfo
     std::string name;
     std::string composer;
     std::string file;
+    std::string id;
+};
+
+struct UserSongInfo
+{
+    unsigned long score{0};
+    unsigned stars{0};
 };

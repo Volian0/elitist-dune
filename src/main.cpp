@@ -9,6 +9,7 @@
 #include "Stream.hpp"
 #include "Tile.hpp"
 #include "Utility.hpp"
+#include "AdManager.hpp"
 
 #include <GLES3/gl3.h>
 #include <SDL3/SDL.h>
@@ -68,7 +69,7 @@ enum class State : unsigned char
 int main(int, char*[])
 {
     constexpr const char* APP_NAME{"Elitist Dune"};
-    SDL_SetAppMetadata(APP_NAME, "0.2.1", "com.volian.elitistdune");
+    SDL_SetAppMetadata(APP_NAME, "0.3.0", "com.volian.elitistdune");
     SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO);
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "Portrait");
     constexpr unsigned SAMPLE_RATE{44100};
@@ -485,9 +486,22 @@ int main(int, char*[])
         for (const auto& json_song_info : json)
         {
             basic_song_infos.emplace_back(
-                BasicSongInfo{json_song_info.at("name"), json_song_info.at("composer"), json_song_info.at("file")});
+                BasicSongInfo{json_song_info.at("name"), json_song_info.at("composer"), json_song_info.at("file"), json_song_info.at("id")});
         }
     }
+    std::vector<UserSongInfo> user_song_infos;
+    auto fill_user_song_infos = [&](){
+        user_song_infos.clear();
+        for (const auto& basic_song_info : basic_song_infos)
+        {
+            UserSongInfo user_song_info;
+            std::ifstream file(get_pref_path((basic_song_info.id+".sav").data()));
+            file >> user_song_info.score;
+            file >> user_song_info.stars;
+            user_song_infos.emplace_back(user_song_info);
+        }
+    };
+    fill_user_song_infos();
     Level level;
     auto tp_old = std::chrono::steady_clock::now();
     const auto tp_start = tp_old;
@@ -591,7 +605,7 @@ int main(int, char*[])
                     && event.tfinger.y / aspect_ratio >= position &&
                         event.tfinger.y /aspect_ratio <= position + size)
                         {
-                            level.revive(soundfont);
+                            ShowAndroidAd();
                         }
                         else if (level.revive_dialog == 2 &&
                         event.tfinger.x >= position_x_giveup
@@ -600,6 +614,8 @@ int main(int, char*[])
                         event.tfinger.y /aspect_ratio <= position + size)
                         {
                             state = State::SONG_SELECT;
+                            fill_user_song_infos();
+                            ShowAndroidIAd();
                         }
                         continue;
                     }
@@ -677,6 +693,7 @@ int main(int, char*[])
                 }
                 else if (state == State::SONG_SELECT)
                 {
+                    bool was_scrolling = menu_scrolling;
                     if (event.tfinger.fingerID == menu_finger_id)
                     {
                         menu_finger_id = std::nullopt;
@@ -695,13 +712,28 @@ int main(int, char*[])
                             {
                                 // TODO TODO: LEVEL CHANGING HERE
                                 level = Level{("song/" + basic_song_infos.at(i).file).data(), soundfont,
-                                              basic_song_infos.at(i).name, basic_song_infos.at(i).composer};
+                                              basic_song_infos.at(i).name, basic_song_infos.at(i).composer, basic_song_infos.at(i).id};
                                 state = State::LEVEL;
                                 break;
                             }
                         }
 
                         menu_focused_button.reset();
+                    }
+                    //check if we clicked trophy
+                    else if (!was_scrolling)
+                    {
+                        for (unsigned i = 0; i < total_songs; ++i)
+                        {
+                            //{620.0F / 1000.0F, 155.0F / 1000.0F + 0.24F * i}
+                            if (event.tfinger.x >= 0.62F &&
+                                event.tfinger.y / aspect_ratio >= 0.155F + 0.24F * i - current_scroll &&
+                                event.tfinger.x <= 0.67F &&
+                                event.tfinger.y / aspect_ratio <= 0.205F + 0.24F * i - current_scroll)
+                            {
+                                ShowLeaderboard(basic_song_infos.at(i).id.data());
+                            }
+                        }
                     }
                 }
             }
@@ -753,11 +785,18 @@ int main(int, char*[])
         ebo_offset_sdf = 0;
         if (state == State::LEVEL)
         {
+             if (level.revive_dialog && rewarded)
+             {
+                level.revive(soundfont);
+                rewarded = false;
+             }
             // update the game
             level.update(delta_time, tp_new, soundfont);
             if (level.boot_to_main_menu)
             {
                 state = State::SONG_SELECT;
+                fill_user_song_infos();
+                ShowAndroidIAd();
                 continue;
             }
             // draw_quad({1, 1}, {446, 510}, {0, 0}, {4, 4}, matrix_level);
@@ -989,11 +1028,11 @@ int main(int, char*[])
                 float position = 1.0F / aspect_ratio * 0.5F - 0.25F;
                 draw_quad({460, 511}, {0, 0}, {0.0F, position}, {1.0F, 0.5F},
                           matrix_aspect);
-                float revive_text_size = get_length_text_ascii(font, "You can do this!", 0.0000015F);
-                draw_text_ascii(font, {0.5F - revive_text_size * 0.5F, position + 0.125F}, "You can do this!",
+                float revive_text_size = get_length_text_ascii(font, "Game Over", 0.0000015F);
+                draw_text_ascii(font, {0.5F - revive_text_size * 0.5F, position + 0.125F}, "Game Over",
                            matrix_aspect, 0.0000015F, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F}, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
                 draw_quad({600, 0}, {192, 64}, {115.0F / 1000.0F, position + 0.25F + 0.1F},
-                          {270.0F / 1000.0F, 80.0F / 1000.0F}, matrix_aspect, glm::vec4{0.5F, 1.0F, 1.0F, 1.0F});
+                          {270.0F / 1000.0F, 80.0F / 1000.0F}, matrix_aspect);
                 float ad_text_size = get_length_text_ascii(font, "Revive for ad", 9.20245399e-7F);
                 float giveup_text_size = get_length_text_ascii(font, "Give up", 9.20245399e-7F);
                 draw_text_ascii(
@@ -1002,7 +1041,7 @@ int main(int, char*[])
                 if (level.revive_dialog == 2)
                 { 
                     draw_quad({600, 0}, {192, 64}, {615.0F/ 1000.0F, position + 0.25F + 0.1F},
-                            {270.0F / 1000.0F, 80.0F / 1000.0F}, matrix_aspect, glm::vec4{1.0F, 0.5F, 0.5F, 1.0F});
+                            {270.0F / 1000.0F, 80.0F / 1000.0F}, matrix_aspect);
                     draw_text_ascii(
                         font, {(615.0F + 270.0F * 0.5F) / 1000.0F - giveup_text_size * 0.5F, position + 0.25F + 0.1F + 55.0F / 1000.0F},
                         "Give up", matrix_aspect, 9.20245399e-7F, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F}, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
@@ -1130,6 +1169,17 @@ int main(int, char*[])
                     (i == menu_focused_button) ? glm::vec4{0.6F, 0.6F, 0.6F, 1.0F} : glm::vec4{1.0F};
                 draw_quad({600, 0}, {192, 64}, {690.0F / 1000.0F, 140.0F / 1000.0F + 0.24F * i},
                           {270.0F / 1000.0F, 80.0F / 1000.0F}, mvp, button_color, button_color);
+                //draw stars
+                for (unsigned star_index = 0; star_index < user_song_infos.at(i).stars; ++star_index)
+                {
+                    draw_quad({128, 800}, {128, 128}, {(190.0F + star_index * 55.0F) / 1000.0F, 155.0F / 1000.0F + 0.24F * i},
+                            {50.0F / 1000.0F, 50.0F / 1000.0F}, mvp, glm::vec4{1.0F}, glm::vec4{1.0F, 1.0F, 0.5F, 1.0F});
+                }
+
+                //draw trophy
+                draw_quad({256, 800}, {128, 128}, {620.0F / 1000.0F, 155.0F / 1000.0F + 0.24F * i},
+                            {50.0F / 1000.0F, 50.0F / 1000.0F}, mvp);
+
                 draw_text_ascii(font, {30.0F / 1000.0F, 80.0F / 1000.0F + 0.24F * i}, std::to_string(i + 1), mvp,
                                 9.20245399e-7F, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F}, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
                 draw_text_ascii(font, {190.0F / 1000.0F, 80.0F / 1000.0F + 0.24F * i}, basic_song_infos.at(i).name, mvp,
@@ -1141,6 +1191,15 @@ int main(int, char*[])
                 draw_text_ascii(
                     font, {(690.0F + 270.0F * 0.5F) / 1000.0F - play_score_length * 0.5F, 195.0F / 1000.0F + 0.24F * i},
                     "Play", mvp, 9.20245399e-7F, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F}, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
+
+                //draw score
+                if (user_song_infos.at(i).score)
+                { 
+                    std::string score_string = std::to_string(user_song_infos.at(i).score);
+                    float score_length = get_length_text_ascii(font, score_string, 9.20245399e-7F);
+                    draw_text_ascii(font, {600.0F / 1000.0F - score_length, 195.0F / 1000.0F + 0.24F * i}, score_string, mvp,
+                                    9.20245399e-7F, glm::vec4{1.0F, 0.25F, 0.25F, 1.0F}, glm::vec4{1.0F, 0.25F, 0.25F, 1.0F});
+                }
             }
  
             glEnable(GL_BLEND);

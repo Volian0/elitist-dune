@@ -3,6 +3,7 @@
 #include "SongInfo.hpp"
 #include "Soundfont.hpp"
 #include "Tile.hpp"
+#include "Utility.hpp"
 
 #include <glm/glm.hpp>
 
@@ -12,14 +13,18 @@
 #include <optional>
 #include <random>
 #include <vector>
+#include <fstream>
+
+extern void LoadAndroidAd();
+extern void SubmitLeaderBoard(const char* t_id, long long t_score);
 
 struct Level
 {
     Level() = default;
 
-    Level(const char* t_file, Soundfont& t_soundfont, std::string t_song_name, std::string t_song_composer)
+    Level(const char* t_file, Soundfont& t_soundfont, std::string t_song_name, std::string t_song_composer, std::string t_id)
         : song_info{t_file}, tempo(song_info.get_starting_tempo()), distribution(0, 11),
-          song_name{std::move(t_song_name)}, song_composer{std::move(t_song_composer)}
+          song_name{std::move(t_song_name)}, song_composer{std::move(t_song_composer)}, id{std::move(t_id)}
     {
         starting_tps = tempo;
         spawn_tiles();
@@ -34,17 +39,38 @@ struct Level
         }
         tile_id_tempo1 = total_tiles / 3;
         tile_id_tempo2 = total_tiles * 2 / 3;
+        load_best_score();
+        LoadAndroidAd();
+    }
+
+    void load_best_score()
+    {
+        std::ifstream file(get_pref_path((id+".sav").data()));
+        file >> best_score;
+        file >> best_stars;
+    }
+
+    void save_score()
+    {
+        if (speed_modifier != 0)
+        {
+            return;
+        }
+        std::ofstream file(get_pref_path((id+".sav").data()));
+        file << glm::max(score, best_score) << ' ' << glm::max(stars, best_stars);
     }
 
     // TODO: IN CONSTRUCTOR
     std::string song_name;
     std::string song_composer;
+    std::string id;
     unsigned long best_score{0};
     int speed_modifier{0};
     unsigned total_tiles{0};
 
     unsigned tile_id_tempo1;
     unsigned tile_id_tempo2;
+    unsigned best_stars{0};
 
     bool boot_to_main_menu = false;
 
@@ -94,15 +120,21 @@ struct Level
                     {
                         time_song_started = t_time;
                     }
+                    else
+                    {
+                        add_new_star();
+                    }
                     ++current_lap;
                 }
                 else if (cleared_tiles == tile_id_tempo1)
                 {
                     background_id = 1.0F;
+                    add_new_star();
                 }
                 else if (cleared_tiles == tile_id_tempo2)
                 {
                     background_id = 2.0F;
+                    add_new_star();
                 }
                 if (current_lap > 1 && (tile.id == 0 || cleared_tiles % total_tiles == tile_id_tempo1 ||
                                         cleared_tiles % total_tiles == tile_id_tempo2))
@@ -192,6 +224,9 @@ struct Level
 
     void game_over(const std::chrono::steady_clock::time_point& t_time, Soundfont& t_soundfont)
     {
+        save_score();
+        SubmitLeaderBoard(id.data(), score);
+        LoadAndroidAd();
         score_display = score;
         // time_last_score_update = t_time;
         time_game_over = t_time;
@@ -475,6 +510,16 @@ struct Level
     std::chrono::steady_clock::time_point time_game_over;
     float position_game_over;
     unsigned char revives_used{0};
+    unsigned stars{0};
+
+    void add_new_star()
+    {
+        if (stars == 5)
+        {
+            return;
+        }
+        ++stars;
+    }
 
     void revive(Soundfont& t_soundfont)
     {
@@ -520,7 +565,7 @@ struct Level
         return v8;
     }
 
-    void reset(Soundfont& t_soundfont)
+    /*void reset(Soundfont& t_soundfont)
     {
         revive_dialog = false;
         tempo = song_info.get_starting_tempo();
@@ -542,5 +587,5 @@ struct Level
         std::scoped_lock lock{t_soundfont.mutex};
         t_soundfont.all_notes_off();
         // tempo = 10.0F; //TODO: TEMPORARY, DELETE LATER
-    }
+    }*/
 };

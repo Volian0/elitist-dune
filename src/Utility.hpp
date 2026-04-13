@@ -14,6 +14,17 @@ inline std::string get_res_path(const char* t_file)
 #endif
 }
 
+inline std::string get_pref_path(const char* t_file)
+{
+    static std::string pref_path{[](){
+        char* pref_path_cstr = SDL_GetPrefPath("volian", "elitistdune");
+        std::string pref_path_str = pref_path_cstr;
+        SDL_free(pref_path_cstr);
+        return pref_path_str;
+    }()};
+    return pref_path + t_file;
+}
+
 template <typename T = unsigned char> inline std::vector<T> file_to_buffer(const char* t_file)
 {
     std::vector<T> buffer;

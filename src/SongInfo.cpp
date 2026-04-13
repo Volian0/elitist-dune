@@ -15,6 +15,10 @@ NoteInfo::NoteInfo(SDL_IOStream* t_stream)
 TileInfo::TileInfo(SDL_IOStream* t_stream)
     : m_unit_length{read_u32(t_stream)}, m_type{static_cast<Type>(read_u8(t_stream))}
 {
+    if (m_type == Type::SLIDER)
+    {
+        m_type = Type::LONG;
+    }
     if (m_type != Type::EMPTY)
     {
         m_events.at(0) = read_array<NoteInfo>(t_stream);

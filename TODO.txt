@@ -41,9 +41,10 @@
 [ ] Add background in song select section
 [ ] SFX for clicking play
 [ ] .at() -> []
-[ ] score saving
+[X] score saving
 [ ] Full icon, not white letterbox
-[ ] always 3 decimals even if number is >= 10
+[X] always 3 decimals even if number is >= 10
 [X] Long tile line
 [V] Long tile audio effects circle
 [ ] Double tile missed correct rendering game over flashing
+[ ] Consistent red color of score
