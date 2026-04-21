@@ -10,6 +10,7 @@
 #include "Tile.hpp"
 #include "Utility.hpp"
 #include "AdManager.hpp"
+#include "Color.hpp"
 
 #include <GLES3/gl3.h>
 #include <SDL3/SDL.h>
@@ -69,7 +70,7 @@ enum class State : unsigned char
 int main(int, char*[])
 {
     constexpr const char* APP_NAME{"Elitist Dune"};
-    SDL_SetAppMetadata(APP_NAME, "0.3.0", "com.volian.elitistdune");
+    SDL_SetAppMetadata(APP_NAME, "0.3.3", "com.volian.elitistdune");
     SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO);
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "Portrait");
     constexpr unsigned SAMPLE_RATE{44100};
@@ -346,6 +347,9 @@ int main(int, char*[])
     Soundfont soundfont{"soundfont/piano.sf2", SAMPLE_RATE};
     SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "1");
     MIX_SetPostMixCallback(mixer, soundfont_callback, &soundfont);
+    MIX_Track* track_sfx{MIX_CreateTrack(mixer)};
+    MIX_Audio* sfx_click{MIX_LoadAudio(mixer, get_res_path("sound/click.mp3").data(), true)};
+    MIX_Audio* sfx_swoosh{MIX_LoadAudio(mixer, get_res_path("sound/swoosh.mp3").data(), true)};
     // glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
     // glEnable(GL_BLEND);
@@ -444,12 +448,12 @@ int main(int, char*[])
             position.x += CHAR_SIZE_SCALED.x;
         }
     };
-    const auto draw_text_ascii = [&](const Font& t_font, const glm::vec2& t_position, std::string_view t_text,
+    const auto draw_text_ascii = [&](const Font& t_font, const glm::vec2& t_position, const auto& t_text,
                                      const glm::mat4& t_matrix, float t_scale = 1.0F,
                                      const glm::vec4& t_tint_top = glm::vec4{1.0F},
                                      const glm::vec4& t_tint_bottom = glm::vec4{1.0F}, float t_thickness = 0.5F) {
         glm::vec2 pen_position{t_position};
-        for (char c : t_text) // TODO: at() -> [], const auto& glyph instead of at
+        for (auto c : t_text) // TODO: at() -> [], const auto& glyph instead of at
         {
             const auto& glyph = t_font.glyphs.at(c);
             // std::cout << "pen:" << glm::to_string(pen_position) << std::endl;
@@ -486,7 +490,7 @@ int main(int, char*[])
         for (const auto& json_song_info : json)
         {
             basic_song_infos.emplace_back(
-                BasicSongInfo{json_song_info.at("name"), json_song_info.at("composer"), json_song_info.at("file"), json_song_info.at("id")});
+                BasicSongInfo{utf8_to_utf32(json_song_info.at("name")), utf8_to_utf32(json_song_info.at("composer")), json_song_info.at("file"), json_song_info.at("id")});
         }
     }
     std::vector<UserSongInfo> user_song_infos;
@@ -553,6 +557,7 @@ int main(int, char*[])
     bool menu_scrolling = false;
     float scroll_velocity = 0.0f;
     glm::mat4 mvp = matrix_aspect * glm::translate(glm::mat4{1.0F}, glm::vec3{0.0F, -current_scroll, 0.0F});
+    std::optional<unsigned> last_played_song_index;
     while (true)
     {
         const auto tp_new = std::chrono::steady_clock::now();
@@ -714,6 +719,10 @@ int main(int, char*[])
                                 level = Level{("song/" + basic_song_infos.at(i).file).data(), soundfont,
                                               basic_song_infos.at(i).name, basic_song_infos.at(i).composer, basic_song_infos.at(i).id};
                                 state = State::LEVEL;
+                                last_played_song_index = i;
+                                MIX_SetTrackAudio(track_sfx, sfx_click);
+                                MIX_PlayTrack(track_sfx, 0);
+                                scroll_velocity = 0.0F;
                                 break;
                             }
                         }
@@ -732,6 +741,9 @@ int main(int, char*[])
                                 event.tfinger.y / aspect_ratio <= 0.205F + 0.24F * i - current_scroll)
                             {
                                 ShowLeaderboard(basic_song_infos.at(i).id.data());
+                                MIX_SetTrackAudio(track_sfx, sfx_click);
+                                MIX_PlayTrack(track_sfx, 0);
+                                break;
                             }
                         }
                     }
@@ -972,13 +984,13 @@ int main(int, char*[])
                 draw_quad({460, 511}, {0, 0}, {0.0F, really_idle ? 3.0F : 3.0F + progress_idle * 4.0F}, {4.0F, 1.0F},
                           matrix_level);
                 draw_text_ascii(font, {0.125F * 0.5F, 0.875F / aspect_ratio + 0.05F}, level.song_composer,
-                                matrix_aspect, 0.000001F, glm::vec4(0.4F, 0.4F, 0.4F, 1.0F),
-                                glm::vec4(0.4F, 0.4F, 0.4F, 1.0F), really_idle ? 0.5F : 0.5F - powed * 0.5F);
+                                matrix_aspect, 0.000001F, color::COMPOSER,
+                                color::COMPOSER, really_idle ? 0.5F : 0.5F - powed * 0.5F);
                 draw_text_ascii(font, {1.0F - 0.5F * 0.125F - string_best_score_length, 0.875F / aspect_ratio + 0.05F},
-                                best_string, matrix_aspect, 0.000001F, glm::vec4(1.0F, 0.1F, 0.1F, 1.0F),
-                                glm::vec4(1.0F, 0.2F, 0.2F, 1.0F), really_idle ? 0.5F : 0.5F - powed * 0.5F);
+                                best_string, matrix_aspect, 0.000001F, color::SCORE,
+                                color::SCORE, really_idle ? 0.5F : 0.5F - powed * 0.5F);
                 draw_text_ascii(font, {0.125F * 0.5F, 0.875F / aspect_ratio - 0.01F}, level.song_name, matrix_aspect,
-                                0.0000015F, glm::vec4(0.00F, 0.0F, 0.0F, 1.0F), glm::vec4(0.0F, 0.0F, 0.0F, 1.0F),
+                                0.0000015F, color::BLACK, color::BLACK,
                                 really_idle ? 0.5F : 0.5F - powed * 0.5F);
                 float offset = glm::sin(total_time * 3.1415F) * 0.05F;
                 draw_quad({870, 128}, {128, 128},
@@ -1003,13 +1015,13 @@ int main(int, char*[])
             float string_tps_length = get_length_text_ascii(font, string_tps, 0.0000015F);
             bool draw_score = !level.idle || level.revives_used > 0;
             draw_text_ascii(font, {0.5F - string_score_length * 0.5F, 0.125F / aspect_ratio}, string_score,
-                            matrix_aspect, additional_score_size, glm::vec4(0.0F, 0.0F, 0.0F, 1.0F),
-                            glm::vec4(0.0F, 0.0F, 0.0F, 1.0F), 0.9);
+                            matrix_aspect, additional_score_size, color::BLACK,
+                            color::BLACK, 0.9);
             draw_text_ascii(font, {0.5F - string_tps_length * 0.5F, 0.125F / aspect_ratio + 0.09}, string_tps,
-                            matrix_aspect, 0.0000015F, glm::vec4(0.0F, 0.0F, 0.0F, 1.0F),
-                            glm::vec4(0.0F, 0.0F, 0.0F, 1.0F), 0.9);
+                            matrix_aspect, 0.0000015F, color::BLACK,
+                            color::BLACK, 0.9);
             glm::vec4 color =
-                level.speed_modifier == 0 ? glm::vec4(1.0F, 0.1F, 0.1F, 1.0F) : glm::vec4(0.9F, 0.9F, 0.1F, 1.0F);
+                level.speed_modifier == 0 ? color::SCORE : glm::vec4(0.9F, 0.9F, 0.1F, 1.0F);
             if (level.speed_modifier < 0)
             {
                 color = glm::vec4(0.1F, 0.9F, 0.1F, 1.0F);
@@ -1018,25 +1030,34 @@ int main(int, char*[])
                             matrix_aspect, additional_score_size, color, color);
             draw_text_ascii(font, {0.5 - string_tps_length * 0.5F, 0.125F / aspect_ratio + 0.09}, string_tps,
                             matrix_aspect, 0.0000015F, glm::vec4(1.0F, 0.9F, 0.9F, 1.0F),
-                            glm::vec4(1.0F, 1.0F, 1.0F, 1.0F));
-            if (level.revive_dialog)
+                            color::WHITE);
+            if (level.revives_used != 3 && level.game_over_column)
             {
+                float progress_time = std::chrono::duration<float>(tp_new - level.time_game_over).count() - 1.0F;
+                if (!level.swooshed && progress_time > 0.0F)
+                {
+                    level.swooshed = true;
+                    MIX_SetTrackAudio(track_sfx, sfx_swoosh);
+                    MIX_PlayTrack(track_sfx, 0);
+                }
+                progress_time = glm::clamp(progress_time, 0.0F, 1.0F);
                 draw_quad({460, 511}, {0, 0}, {0.0F, 0.0F}, {4.0F, 4.0F},
-                          matrix_level, glm::vec4{0.0F, 0.0F, 0.0F, 0.5F}, glm::vec4{0.0F, 0.0F, 0.0F, 0.5F});
+                          matrix_level, glm::vec4{0.0F, 0.0F, 0.0F, progress_time * 0.5F}, glm::vec4{0.0F, 0.0F, 0.0F, progress_time * 0.5F});
                 //draw_quad({460, 511}, {0, 0}, {0.0F, 2.0F - 1.0F * aspect_ratio}, {4.0F, 2.0F * aspect_ratio},
                 //          matrix_level);
+                progress_time = glm::pow(progress_time, 0.5F);
                 float position = 1.0F / aspect_ratio * 0.5F - 0.25F;
-                draw_quad({460, 511}, {0, 0}, {0.0F, position}, {1.0F, 0.5F},
+                draw_quad({460, 511}, {0, 0}, {-1.0F + progress_time, position}, {1.0F, 0.5F},
                           matrix_aspect);
                 float revive_text_size = get_length_text_ascii(font, "Game Over", 0.0000015F);
-                draw_text_ascii(font, {0.5F - revive_text_size * 0.5F, position + 0.125F}, "Game Over",
+                draw_text_ascii(font, {0.5F - revive_text_size * 0.5F - 1.0F + progress_time, position + 0.125F}, "Game Over",
                            matrix_aspect, 0.0000015F, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F}, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
-                draw_quad({600, 0}, {192, 64}, {115.0F / 1000.0F, position + 0.25F + 0.1F},
+                draw_quad({600, 0}, {192, 64}, {115.0F / 1000.0F - 1.0F + progress_time, position + 0.25F + 0.1F},
                           {270.0F / 1000.0F, 80.0F / 1000.0F}, matrix_aspect);
                 float ad_text_size = get_length_text_ascii(font, "Revive for ad", 9.20245399e-7F);
                 float giveup_text_size = get_length_text_ascii(font, "Give up", 9.20245399e-7F);
                 draw_text_ascii(
-                    font, {(115.0F + 270.0F * 0.5F) / 1000.0F - ad_text_size * 0.5F, position + 0.25F + 0.1F + 55.0F / 1000.0F},
+                    font, {(115.0F + 270.0F * 0.5F) / 1000.0F - ad_text_size * 0.5F - 1.0F + progress_time, position + 0.25F + 0.1F + 55.0F / 1000.0F},
                     "Revive for ad", matrix_aspect, 9.20245399e-7F, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F}, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
                 if (level.revive_dialog == 2)
                 { 
@@ -1185,12 +1206,13 @@ int main(int, char*[])
                 draw_text_ascii(font, {190.0F / 1000.0F, 80.0F / 1000.0F + 0.24F * i}, basic_song_infos.at(i).name, mvp,
                                 9.20245399e-7F, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F}, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
                 draw_text_ascii(font, {190.0F / 1000.0F, 125.0F / 1000.0F + 0.24F * i}, basic_song_infos.at(i).composer,
-                                mvp, 7.66871166e-7F, glm::vec4{0.4F, 0.4F, 0.4F, 1.0F},
-                                glm::vec4{0.4F, 0.4F, 0.4F, 1.0F});
-                float play_score_length = get_length_text_ascii(font, "Play", 9.20245399e-7F);
+                                mvp, 7.66871166e-7F, color::COMPOSER,
+                                color::COMPOSER);
+                std::string play_text = i == last_played_song_index ? "Replay" : "Play";
+                float play_score_length = get_length_text_ascii(font, play_text, 9.20245399e-7F);
                 draw_text_ascii(
                     font, {(690.0F + 270.0F * 0.5F) / 1000.0F - play_score_length * 0.5F, 195.0F / 1000.0F + 0.24F * i},
-                    "Play", mvp, 9.20245399e-7F, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F}, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
+                    play_text, mvp, 9.20245399e-7F, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F}, glm::vec4{0.0F, 0.0F, 0.0F, 1.0F});
 
                 //draw score
                 if (user_song_infos.at(i).score)
@@ -1198,7 +1220,7 @@ int main(int, char*[])
                     std::string score_string = std::to_string(user_song_infos.at(i).score);
                     float score_length = get_length_text_ascii(font, score_string, 9.20245399e-7F);
                     draw_text_ascii(font, {600.0F / 1000.0F - score_length, 195.0F / 1000.0F + 0.24F * i}, score_string, mvp,
-                                    9.20245399e-7F, glm::vec4{1.0F, 0.25F, 0.25F, 1.0F}, glm::vec4{1.0F, 0.25F, 0.25F, 1.0F});
+                                    9.20245399e-7F, color::SCORE, color::SCORE);
                 }
             }
  

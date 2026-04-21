@@ -126,8 +126,8 @@ private:
 
 struct BasicSongInfo
 {
-    std::string name;
-    std::string composer;
+    std::u32string name;
+    std::u32string composer;
     std::string file;
     std::string id;
 };

@@ -62,7 +62,7 @@ struct Soundfont
         tsf_reset(handle);
     }
 
-    void play_queued_note_events(const std::chrono::steady_clock::time_point& t_time)
+    /*void play_queued_note_events(const std::chrono::steady_clock::time_point& t_time)
     {
         while (!queued_note_events.empty())
         {
@@ -85,7 +85,7 @@ struct Soundfont
             }
             queued_note_events.pop_front();
         }
-    }
+    }*/
 
     void render(float* t_buffer, unsigned t_samples)
     {
@@ -104,11 +104,41 @@ struct Soundfont
     std::deque<QueuedNoteEvent> queued_note_events;
 };
 
+
 inline void soundfont_callback(void* t_soundfont, MIX_Mixer* t_mixer, const SDL_AudioSpec* t_spec, float* t_pcm,
                                int t_samples)
 {
+    const std::chrono::steady_clock::time_point t_time{std::chrono::steady_clock::now()};
     Soundfont& soundfont = *static_cast<Soundfont*>(t_soundfont);
+    
+    unsigned real_samples = t_samples / 2;
+    unsigned samples_rendered = 0;
+    
     std::scoped_lock lock{soundfont.mutex};
-    soundfont.play_queued_note_events(std::chrono::steady_clock::now());
-    soundfont.render(t_pcm, t_samples / 2);
+    while (!soundfont.queued_note_events.empty())
+    {
+        const auto& queued_note_event = soundfont.queued_note_events[0];
+        unsigned event_samples = std::max(std::chrono::duration<float>(queued_note_event.time - t_time).count() * 44100.0F, 0.0F);
+        event_samples = std::max(samples_rendered, event_samples);
+        if (event_samples >= real_samples)
+        {
+            break;
+        }
+        soundfont.render(t_pcm + samples_rendered * 2, event_samples - samples_rendered);
+        samples_rendered = event_samples;
+        if (queued_note_event.note_info.get_type() == NoteInfo::Type::ON)
+        {
+            soundfont.note_on(queued_note_event.note_info.get_key(), queued_note_event.note_info.get_velocity());
+        }
+        else if (queued_note_event.note_info.get_type() == NoteInfo::Type::OFF)
+        {
+            soundfont.note_off(queued_note_event.note_info.get_key());
+        }
+        else
+        {
+            soundfont.all_notes_off();
+        }
+        soundfont.queued_note_events.pop_front();
+    }
+    soundfont.render(t_pcm + samples_rendered * 2, real_samples - samples_rendered);
 }

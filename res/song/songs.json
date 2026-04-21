@@ -1,9 +1,33 @@
 [
     {
-        "name": "Maple Leaf Rag",
-        "composer": "Scott Joplin",
-        "file": "Maple Leaf Rag.usong",
-        "id": "CgkIi6KI368bEAIQAQ"
+        "name": "German Dance, WoO 13 No. 9",
+        "composer": "Ludwig van Beethoven",
+        "file": "German Dance, WoO 13 No. 9.usong",
+        "id": "CgkIi6KI368bEAIQBA"
+    },
+    {
+        "name": "6 Minuets, WoO 10, No. 1",
+        "composer": "Ludwig van Beethoven",
+        "file": "6 Minuets, WoO 10, No. 1.usong",
+        "id": "CgkIi6KI368bEAIQBw"
+    },
+    {
+        "name": "Allegro Op. 777 No. 6",
+        "composer": "Carl Czerny",
+        "file": "Allegro Op. 777 No. 6.usong",
+        "id": "CgkIi6KI368bEAIQCA"
+    },
+    {
+        "name": "Reunion",
+        "composer": "Marc Sabatella",
+        "file": "Reunion.usong",
+        "id": "BBBTEST2"
+    },
+    {
+        "name": "The Happy Farmer",
+        "composer": "Robert Schumann",
+        "file": "The Happy Farmer.usong",
+        "id": "CgkIi6KI368bEAIQBQ"
     },
     {
         "name": "Sinfonia No. 2",
@@ -12,9 +36,63 @@
         "id": "CgkIi6KI368bEAIQAg"
     },
     {
+        "name": "Kismet Rag",
+        "composer": "Scott Joplin",
+        "file": "Kismet Rag.usong",
+        "id": "CgkIi6KI368bEAIQCQ"
+    },
+    {
+        "name": "Feodora Op. 804",
+        "composer": "Carl Czerny",
+        "file": "Feodora Op. 804.usong",
+        "id": "CgkIi6KI368bEAIQBg"
+    },
+    {
+        "name": "Maple Leaf Rag",
+        "composer": "Scott Joplin",
+        "file": "Maple Leaf Rag.usong",
+        "id": "CgkIi6KI368bEAIQAQ"
+    },
+    {
+        "name": "La Jongleuse Op. 52 No. 4",
+        "composer": "Moritz Moszkowski",
+        "file": "La Jongleuse Op. 52 No. 4.usong",
+        "id": "CgkIi6KI368bEAIQCg"
+    },
+    {
+        "name": "Spanish Dance Op. 12 No. 1",
+        "composer": "Moritz Moszkowski",
+        "file": "Spanish Dance Op. 12 No. 1.usong",
+        "id": "CgkIi6KI368bEAIQCw"
+    },
+    {
         "name": "Gypsy Rondo",
         "composer": "Joseph Haydn",
         "file": "Gypsy Rondo.usong",
         "id": "CgkIi6KI368bEAIQAw"
+    },
+    {
+        "name": "Waltz in A Minor",
+        "composer": "Frédéric Chopin",
+        "file": "Waltz in A Minor.usong",
+        "id": "CgkIi6KI368bEAIQDA"
+    },
+    {
+        "name": "6 Minuets, WoO 10, No. 3",
+        "composer": "Ludwig van Beethoven",
+        "file": "6 Minuets, WoO 10, No. 3.usong",
+        "id": "CgkIi6KI368bEAIQDQ"
+    },
+    {
+        "name": "March of the Empire",
+        "composer": "Dekkadeci",
+        "file": "March of the Empire.usong",
+        "id": "BBBTEST3"
+    },
+    {
+        "name": "Hungarian Rhapsody No. 2",
+        "composer": "Franz Liszt",
+        "file": "Hungarian Rhapsody No. 2.usong",
+        "id": "BBBTEST1"
     }
 ]

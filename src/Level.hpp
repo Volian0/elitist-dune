@@ -22,13 +22,14 @@ struct Level
 {
     Level() = default;
 
-    Level(const char* t_file, Soundfont& t_soundfont, std::string t_song_name, std::string t_song_composer, std::string t_id)
+    Level(const char* t_file, Soundfont& t_soundfont, std::u32string t_song_name, std::u32string t_song_composer, std::string t_id)
         : song_info{t_file}, tempo(song_info.get_starting_tempo()), distribution(0, 11),
           song_name{std::move(t_song_name)}, song_composer{std::move(t_song_composer)}, id{std::move(t_id)}
     {
         starting_tps = tempo;
         spawn_tiles();
         std::scoped_lock lock{t_soundfont.mutex};
+        t_soundfont.queued_note_events.clear();
         t_soundfont.all_notes_off();
         for (const auto& tile_info : song_info.get_tiles())
         {
@@ -52,17 +53,13 @@ struct Level
 
     void save_score()
     {
-        if (speed_modifier != 0)
-        {
-            return;
-        }
         std::ofstream file(get_pref_path((id+".sav").data()));
         file << glm::max(score, best_score) << ' ' << glm::max(stars, best_stars);
     }
 
     // TODO: IN CONSTRUCTOR
-    std::string song_name;
-    std::string song_composer;
+    std::u32string song_name;
+    std::u32string song_composer;
     std::string id;
     unsigned long best_score{0};
     int speed_modifier{0};
@@ -73,6 +70,8 @@ struct Level
     unsigned best_stars{0};
 
     bool boot_to_main_menu = false;
+
+    bool auto_mode = false;
 
     std::chrono::steady_clock::time_point time_song_started;
 
@@ -224,8 +223,11 @@ struct Level
 
     void game_over(const std::chrono::steady_clock::time_point& t_time, Soundfont& t_soundfont)
     {
-        save_score();
-        SubmitLeaderBoard(id.data(), score);
+        if (!auto_mode && speed_modifier >= 0)
+        { 
+            save_score();
+            SubmitLeaderBoard(id.data(), score);
+        } 
         LoadAndroidAd();
         score_display = score;
         // time_last_score_update = t_time;
@@ -240,6 +242,7 @@ struct Level
     }
 
     unsigned revive_dialog{false};
+    bool swooshed{false};
 
     void update(float t_delta_time, const std::chrono::steady_clock::time_point& t_time, Soundfont& t_soundfont)
     {
@@ -268,6 +271,8 @@ struct Level
                     if (revives_used >= 3)
                     {
                         boot_to_main_menu = true;
+                        std::scoped_lock lock{t_soundfont.mutex};
+                        t_soundfont.queued_note_events.clear();
                         t_soundfont.all_notes_off();
                     }
                     else
@@ -283,6 +288,36 @@ struct Level
             }
             return;
         }
+
+        if (auto_mode)
+        {
+            Tile* tile = get_active_tile();
+            if (tile && position - tile->position > -1.0F)
+            {
+                const auto& tile_info = song_info.get_tiles()[tile->id];
+                if (tile_info.get_type() == TileInfo::Type::EMPTY)
+                {
+                }
+                else if (tile_info.get_type() == TileInfo::Type::DOUBLE)
+                {
+                    if (tile->column == Column::DT_LEFT)
+                    {
+                        touch_down(glm::vec2(0.0F + 0.125F, 1.0F), 200, t_time, t_soundfont);
+                        touch_down(glm::vec2(0.5F + 0.125F, 1.0F), 200, t_time, t_soundfont);
+                    }
+                    else
+                    {
+                        touch_down(glm::vec2(0.25F + 0.125F, 1.0F), 200, t_time, t_soundfont);
+                        touch_down(glm::vec2(0.75F + 0.125F, 1.0F), 200, t_time, t_soundfont);
+                    }
+                }
+                else //single and long
+                {
+                    touch_down(glm::vec2(column_to_position(tile->column) * 0.25F + 0.125F, 1.0F), 200, t_time, t_soundfont);
+                }
+            }
+        }
+
         // move tiles
         position += tempo * t_delta_time;
         t_soundfont.pcm -= tempo * t_delta_time;
@@ -523,6 +558,7 @@ struct Level
 
     void revive(Soundfont& t_soundfont)
     {
+        swooshed = false;
         revive_dialog = false;
         for (auto& tile : tiles)
         {
@@ -539,6 +575,7 @@ struct Level
         position = active_tile->position - 1.0F;
         spawn_tiles();
         std::scoped_lock lock{t_soundfont.mutex};
+        t_soundfont.queued_note_events.clear();
         t_soundfont.all_notes_off();
     }
 

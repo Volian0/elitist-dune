@@ -19,7 +19,7 @@
 [X] Game over C minor chord
 [X] All notes off during level load and reset
 [X] Implement double tiles
-[ ] Correct timing in playing queued note events
+[X] Correct timing in playing queued note events
 [X] Tile animations
 [X] Revives
 [X] Cull face ON
@@ -39,7 +39,7 @@
 [X] Button focusing
 [X] Make the banner ad SMALLER
 [ ] Add background in song select section
-[ ] SFX for clicking play
+[X] SFX for clicking play
 [ ] .at() -> []
 [X] score saving
 [ ] Full icon, not white letterbox
@@ -47,4 +47,5 @@
 [X] Long tile line
 [V] Long tile audio effects circle
 [ ] Double tile missed correct rendering game over flashing
-[ ] Consistent red color of score
+[X] Consistent red color of score
+[X] Animation of game over quads and black bg

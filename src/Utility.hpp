@@ -4,6 +4,8 @@
 
 #include <string>
 #include <vector>
+#include <codecvt>     //for std::codecvt_utf8
+#include <locale>      //for std::wstring_convert
 
 inline std::string get_res_path(const char* t_file)
 {
@@ -12,6 +14,12 @@ inline std::string get_res_path(const char* t_file)
 #else
     return std::string{"res/"} + t_file;
 #endif
+}
+
+inline std::u32string utf8_to_utf32(const std::string& t_string)
+{
+    std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> converter;
+    return converter.from_bytes(t_string.data());
 }
 
 inline std::string get_pref_path(const char* t_file)
